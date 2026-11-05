@@ -21,7 +21,7 @@ Dashboard: https://172.18.123.92:8443. Browser PC admin lain perlu mengimpor **p
 
 Gunakan status-server.bat/stop-server.bat. Untuk menyalakan kembali task: Task Scheduler -> SIMONServer -> Run, atau `Start-ScheduledTask SIMONServer` sebagai admin. Log server berotasi di data/logs/server.log. Hindari menjalankan start-server.bat manual bersamaan dengan task karena port sama.
 
-Saat setup membuat akun/database, akun Windows yang menjalankan setup diberi akses sementara ke `data`; sesudah validasi, permission dikembalikan hanya ke SYSTEM dan Administrators. Jika setup bootstrap gagal, permission aman tersebut tetap dipulihkan.
+Saat setup membuat akun/database, akun Windows yang menjalankan setup diberi akses sementara ke folder data dan lokasi database SQLite yang benar-benar dipakai (`SIAMS_DATA`/`DATABASE_URL`); koneksi SQLite diuji sebelum prompt akun. Sesudah validasi, permission dikembalikan hanya ke SYSTEM dan Administrators. Jika setup bootstrap gagal, permission aman tersebut tetap dipulihkan.
 
 ## 2. Akun/data yang sudah ada di PC pengembangan
 

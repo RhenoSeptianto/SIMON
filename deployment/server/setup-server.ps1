@@ -199,25 +199,64 @@ Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'pip', 'install', '-r', $
 Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'pip', 'check') -FailureMessage 'Pemeriksaan dependency gagal: terdapat dependency yang hilang atau tidak kompatibel.'
 
 $dataPath = Join-Path $rootPath 'data'
-New-Item -ItemType Directory -Path $dataPath -Force | Out-Null
+$databaseDataPath = $dataPath
+if ($env:SIAMS_DATA) { $databaseDataPath = [IO.Path]::GetFullPath($env:SIAMS_DATA) }
+$defaultDatabasePath = Join-Path $databaseDataPath 'siams.db'
+$databaseInfoCode = 'import os,sys; from pathlib import Path; from sqlalchemy.engine import make_url; raw=os.getenv(sys.argv[1]); url=make_url(raw) if raw else None; backend=url.get_backend_name() if url else sys.argv[2]; path=(url.database if url else sys.argv[3]) or sys.argv[4]; print(backend); print(Path(path).resolve() if path != sys.argv[4] else path)'
+$databaseInfo = & $venvPythonPath '-c' $databaseInfoCode 'DATABASE_URL' 'sqlite' $defaultDatabasePath ':memory:' 2>&1
+$databaseInfoExitCode = $LASTEXITCODE
+if ($databaseInfoExitCode -ne 0 -or $databaseInfo.Count -lt 2) {
+    $databaseDetails = ($databaseInfo | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    throw "Tidak dapat menentukan lokasi database SIMON dari DATABASE_URL/SIAMS_DATA. Detail: $databaseDetails"
+}
+$databaseBackend = $databaseInfo[0].ToString().Trim()
+$databasePath = $databaseInfo[1].ToString().Trim()
+$permissionPaths = @($dataPath, $databaseDataPath)
+$permissionPaths = @($permissionPaths | Select-Object -Unique)
+foreach ($permissionPath in $permissionPaths) {
+    New-Item -ItemType Directory -Path $permissionPath -Force | Out-Null
+}
+$databaseIsUnderDataPath = $false
+if ($databaseBackend -eq 'sqlite' -and $databasePath -ne ':memory:' -and -not $databasePath.StartsWith('file:')) {
+    foreach ($permissionPath in $permissionPaths) {
+        $normalizedPermissionPath = [IO.Path]::GetFullPath($permissionPath).TrimEnd('\') + '\'
+        if ($databasePath.StartsWith($normalizedPermissionPath, [StringComparison]::OrdinalIgnoreCase)) {
+            $databaseIsUnderDataPath = $true
+            break
+        }
+    }
+    if (-not $databaseIsUnderDataPath) {
+        Write-Warning "DATABASE_URL menunjuk ke SQLite di luar folder data SIMON: '$databasePath'. Setup tidak akan mengubah ACL folder eksternal agar file lain di folder tersebut tetap aman; preflight akan memastikan lokasi database sudah dapat diakses."
+    }
+}
 $setupUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-Invoke-Checked -Exe 'icacls.exe' -Arguments @($dataPath, '/grant:r', "*${setupUserSid}:(OI)(CI)F", '/T', '/Q') -FailureMessage "Gagal memberikan akses sementara ke data untuk akun SID $setupUserSid."
+foreach ($permissionPath in $permissionPaths) {
+    Invoke-Checked -Exe 'icacls.exe' -Arguments @($permissionPath, '/grant:r', "*${setupUserSid}:(OI)(CI)F", '/T', '/Q') -FailureMessage "Gagal memberikan akses sementara ke data '$permissionPath' untuk akun SID $setupUserSid."
+}
 
 try {
-    Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'tools.server_setup') -FailureMessage "Setup konfigurasi SIMON gagal. Pastikan akun setup dapat menulis database SQLite di '$dataPath' dan periksa error TLS/database di atas."
+    if ($databaseBackend -eq 'sqlite' -and $databasePath -ne ':memory:' -and -not $databasePath.StartsWith('file:')) {
+        $sqliteProbeCode = 'import sqlite3,sys; connection=sqlite3.connect(sys.argv[1],timeout=5); connection.close()'
+        Invoke-Checked -Exe $venvPythonPath -Arguments @('-c', $sqliteProbeCode, $databasePath) -FailureMessage "Akun setup tidak dapat membuka database SQLite '$databasePath'. Periksa permission folder dan file database; untuk DATABASE_URL eksternal, jangan ubah ACL seluruh folder yang mungkin berisi file lain."
+    }
+
+    Write-Host "Database SIMON: $databaseBackend ($databasePath)"
+    Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'tools.server_setup') -FailureMessage "Setup konfigurasi SIMON gagal. Pastikan akun setup dapat menulis database '$databasePath' dan periksa error TLS/database di atas."
 
     $backendCheckCode = 'from backend.main import app; assert app.title; print(app.title)'
     $backendCheck = & $venvPythonPath '-c' $backendCheckCode 2>&1
     $backendCheckExitCode = $LASTEXITCODE
     if ($backendCheckExitCode -ne 0) {
         $backendDetails = ($backendCheck | Select-Object -Last 20 | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-        throw "Validasi backend gagal saat memuat aplikasi SIMON. Pastikan dependency Python 3.12 terpasang dan database '$dataPath\siams.db' dapat dibuka. Detail:`n$backendDetails"
+        throw "Validasi backend gagal saat memuat aplikasi SIMON. Pastikan dependency Python 3.12 terpasang dan database '$databasePath' dapat dibuka. Detail:`n$backendDetails"
     }
     $backendCheck | ForEach-Object { Write-Host $_ }
 } catch {
     $setupFailure = $_.Exception.Message
     try {
-        Protect-OperationalData -DataPath $dataPath -SetupUserSid $setupUserSid
+        foreach ($permissionPath in $permissionPaths) {
+            Protect-OperationalData -DataPath $permissionPath -SetupUserSid $setupUserSid
+        }
     } catch {
         throw "$setupFailure`nSelain itu, gagal memulihkan permission aman folder data: $($_.Exception.Message)"
     }
@@ -225,7 +264,9 @@ try {
 }
 
 # Restrict operational database, credentials, and TLS private keys to administrators/SYSTEM.
-Protect-OperationalData -DataPath $dataPath -SetupUserSid $setupUserSid
+foreach ($permissionPath in $permissionPaths) {
+    Protect-OperationalData -DataPath $permissionPath -SetupUserSid $setupUserSid
+}
 
 $certificatePath = Join-Path $rootPath 'data\tls\ca.crt'
 if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) {
