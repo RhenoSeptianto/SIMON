@@ -194,7 +194,13 @@ $certificatePath = Join-Path $rootPath 'data\tls\ca.crt'
 if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) {
     throw "Sertifikat CA tidak ditemukan setelah setup: $certificatePath"
 }
-Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
+$certificateTrustInstalled = $true
+try {
+    Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\LocalMachine\Root' -ErrorAction Stop | Out-Null
+} catch {
+    $certificateTrustInstalled = $false
+    Write-Warning "CA publik SIMON tidak dapat ditambahkan ke Windows Trusted Root: $($_.Exception.Message). Server tetap dapat berjalan, tetapi browser pada PC ini mungkin menampilkan peringatan sertifikat. Jika trust lokal diperlukan, impor '$certificatePath' ke Local Computer > Trusted Root Certification Authorities menggunakan certlm.msc atau minta bantuan administrator IT."
+}
 
 $expectedPythonPath = [IO.Path]::GetFullPath($venvPythonPath)
 $taskIsValid = $false
@@ -257,5 +263,8 @@ if ($healthCheckExitCode -ne 0) {
 Write-Host "HTTPS backend health check OK: HTTP $($healthCheck | Select-Object -Last 1)"
 
 Write-Host 'SIMON siap: https://172.18.123.92:8443'
+if (-not $certificateTrustInstalled) {
+    Write-Host "Perhatian: CA publik belum dipercaya Windows. Impor '$certificatePath' ke Local Computer > Trusted Root Certification Authorities untuk menghilangkan peringatan browser pada PC server."
+}
 Write-Host 'Matikan sleep pada PC server. Log: data\logs\server.log'
 Write-Host 'Jalankan make-agent-package.bat setelah binary agent tersedia.'
