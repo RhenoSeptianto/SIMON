@@ -1,0 +1,88 @@
+"""Optional UI check: pip install playwright; uses installed Microsoft Edge."""
+import os,tempfile,time,json,uuid,subprocess,sys
+from pathlib import Path
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+os.environ['SIAMS_DATA']=tempfile.mkdtemp(prefix='siams-browser-')
+from backend.main import DB,User,Device,Sample,password
+from playwright.sync_api import sync_playwright,expect
+import httpx
+with DB() as s:
+ s.add_all([User(name='QA Admin',username='qaadmin',password=password('1'),role='super_admin'),User(name='QA TS',username='qats',password=password('1'),role='ts')])
+ d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Healthy','temperature_c':44}]}))
+ s.add(d);s.flush();did=d.id
+ for index in range(4):s.add(Sample(device_id=did,event_id=str(uuid.uuid4()),collected=time.time()-7200+index*300,payload=json.dumps({'cpu_usage':20+index,'ram_percent':50+index})))
+ s.commit()
+server=subprocess.Popen([sys.executable,'-m','uvicorn','backend.main:app','--port','8769','--no-access-log'],cwd=ROOT,env=os.environ.copy(),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+try:
+ for _ in range(80):
+  try:
+   if httpx.get('http://127.0.0.1:8769/').status_code==200:break
+  except httpx.HTTPError:pass
+  time.sleep(.1)
+ with sync_playwright() as p:
+  browser=p.chromium.launch(channel='msedge',headless=True)
+  page=browser.new_page(viewport={'width':1280,'height':900})
+  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  page.goto('http://127.0.0.1:8769/')
+  page.locator('[name=username]').fill('qaadmin');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
+  target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)
+  for theme in ('light','dark'):
+   page.evaluate("dark => document.body.classList.toggle('dark', dark)",theme=='dark')
+   for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database'):
+    page.get_by_role('button',name=section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text(section)
+    if section=='Alerts':
+     expect(page.get_by_text('Belum ada peringatan',exact=True)).to_be_visible()
+     assert 'Jalankan agent' not in page.locator('#content').inner_text()
+    assert page.locator('main').evaluate('(e)=>e.getBoundingClientRect().bottom>=window.innerHeight-1')
+    assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1')
+    if section in ('Alerts','Overview','Users'):
+     page.screenshot(path=str(target/f'{section.lower()}-{theme}.png'),full_page=True)
+   page.set_viewport_size({'width':390,'height':844})
+   for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database'):
+    page.get_by_role('button',name=section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text(section)
+    assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),section
+   page.screenshot(path=str(target/f'dashboard-mobile-{theme}.png'),full_page=True)
+   page.set_viewport_size({'width':1280,'height':900})
+  with DB() as s:
+   from backend.main import Alert
+   s.add(Alert(device_id=did,category='disk_free',message='QA storage alert'));s.commit()
+  page.get_by_role('button',name='Alerts',exact=True).click()
+  expect(page.get_by_text('QA storage alert')).to_be_visible()
+  page.get_by_role('button',name='Acknowledge',exact=True).click()
+  expect(page.get_by_text('Ditinjau',exact=True)).to_be_visible()
+  page.get_by_role('button',name='Ganti tema',exact=True).click()
+  assert page.evaluate("localStorage.getItem('theme')===document.body.className")
+  page.get_by_role('button',name='Devices',exact=True).click()
+  page.get_by_label('Cari hostname atau IP').fill('no-match')
+  expect(page.get_by_text('Tidak ada perangkat yang ditampilkan')).to_be_visible()
+  expect(page.locator('#next')).to_be_disabled()
+  page.get_by_label('Cari hostname atau IP').fill('QA-PC')
+  page.get_by_text('QA-PC',exact=True).click()
+  dialog=page.locator('dialog');expect(dialog).to_be_visible();expect(dialog.get_by_text('24%',exact=True)).to_be_visible()
+  expect(dialog.locator('.monitoring-schedule')).to_have_count(0)
+  expect(page.locator('#panel-overview').get_by_text('Tersisa 80%',exact=True)).to_be_visible()
+  page.get_by_role('tab',name='Storage',exact=True).click();expect(dialog.get_by_text('QA SSD',exact=True)).to_be_visible()
+  page.get_by_role('tab',name='Histori',exact=True).click();expect(page.locator('#historySlider')).to_be_visible()
+  expect(page.locator('#historyTooltip')).to_contain_text('CPU 23%')
+  page.locator('#historySlider').focus();page.keyboard.press('Home');expect(page.locator('#historyTooltip')).to_contain_text('CPU 20%')
+  page.get_by_label('Periode histori').select_option('1');expect(page.get_by_text('Belum ada sampel pada periode ini')).to_be_visible()
+  page.get_by_label('Periode histori').select_option('168');expect(page.locator('#historySVG')).to_be_visible()
+  page.get_by_role('tab',name='Akses User',exact=True).click();page.get_by_label('Pilih user TS').select_option(label='QA TS (qats)');page.get_by_role('button',name='Assign',exact=True).click();expect(page.get_by_text('User berhasil diassign.')).to_be_visible()
+  page.get_by_role('tab',name='Ringkasan',exact=True).click();page.get_by_role('button',name='Refresh data',exact=True).click();expect(page.get_by_role('tab',name='Ringkasan')).to_have_attribute('aria-selected','true')
+  page.evaluate("document.body.classList.add('dark')")
+  target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)
+  page.screenshot(path=str(target/'device-desktop.png'))
+  page.set_viewport_size({'width':390,'height':844});page.screenshot(path=str(target/'device-mobile.png'))
+  assert page.locator('dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+  page.get_by_role('button',name='Tutup detail perangkat',exact=True).click();expect(dialog).not_to_be_visible()
+  page.get_by_role('button',name='Keluar',exact=True).click()
+  page.locator('[name=username]').fill('qats');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click();page.get_by_text('QA-PC',exact=True).click()
+  expect(page.get_by_role('tab',name='Akses User',exact=True)).to_have_count(0)
+  assert not errors,errors
+  print('PASS: desktop/mobile, tabs, percentages, history tooltip/slider/period, refresh, assignment, TS authorization; no JavaScript errors.')
+  browser.close()
+finally:
+ server.terminate();server.wait(timeout=15)
