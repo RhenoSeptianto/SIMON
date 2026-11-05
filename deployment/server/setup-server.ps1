@@ -19,18 +19,55 @@ function Invoke-Checked {
     }
 }
 
-$pythonLauncher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
-if (-not $pythonLauncher) {
-    throw 'Python Launcher (py.exe) tidak ditemukan. Instal Python 3.12 x64 dari https://www.python.org/downloads/windows/ dan aktifkan opsi Python Launcher, lalu jalankan setup kembali.'
+function Resolve-PythonLauncher {
+    $launcher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
+    if ($launcher) { return $launcher.Source }
+
+    $knownPaths = @(
+        (Join-Path $env:WINDIR 'py.exe'),
+        (Join-Path $env:ProgramFiles 'Python Launcher\py.exe'),
+        (Join-Path $env:LocalAppData 'Programs\Python\Launcher\py.exe')
+    )
+    foreach ($path in $knownPaths) {
+        if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) { return $path }
+    }
+    return $null
 }
 
-$pythonInfo = & $pythonLauncher.Source '-3.12-64' '-c' 'import sys; print(sys.version_info.major, sys.version_info.minor, sys.maxsize > 2**32, sep=chr(124))' 2>&1
+function Refresh-ProcessPath {
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $pathEntries = @($machinePath, $userPath) | Where-Object { $_ }
+    $env:Path = $pathEntries -join ';'
+}
+
+$pythonLauncherPath = Resolve-PythonLauncher
+if (-not $pythonLauncherPath) {
+    $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw 'Python 3.12 x64 belum terpasang dan winget tidak tersedia untuk instalasi otomatis. Instal "App Installer" dari Microsoft Store, lalu jalankan setup lagi, atau instal Python 3.12 x64 dari https://www.python.org/downloads/windows/.'
+    }
+
+    Write-Host 'Python belum ditemukan. Menginstal Python 3.12 x64 untuk semua pengguna lewat winget...'
+    Invoke-Checked -Exe $winget.Source -Arguments @(
+        'install', '--id', 'Python.Python.3.12', '--exact', '--scope', 'machine',
+        '--silent', '--accept-package-agreements', '--accept-source-agreements'
+    ) -FailureMessage 'Instalasi otomatis Python 3.12 x64 gagal. Pastikan PC terhubung ke internet dan winget/App Installer tersedia; kemudian instal Python 3.12 x64 manual dari https://www.python.org/downloads/windows/.'
+
+    Refresh-ProcessPath
+    $pythonLauncherPath = Resolve-PythonLauncher
+    if (-not $pythonLauncherPath) {
+        throw 'Python berhasil dipasang, tetapi Python Launcher (py.exe) belum dapat ditemukan. Buka terminal baru lalu jalankan setup lagi; jika masih gagal, instal Python 3.12 x64 dengan opsi Python Launcher dari https://www.python.org/downloads/windows/.'
+    }
+}
+
+$pythonInfo = & $pythonLauncherPath '-3.12-64' '-c' 'import sys; print(sys.version_info.major, sys.version_info.minor, sys.maxsize > 2**32, sep=chr(124))' 2>&1
 $pythonCheckExitCode = $LASTEXITCODE
 $pythonInfoLine = ''
 if ($pythonInfo) { $pythonInfoLine = ($pythonInfo | Select-Object -Last 1).ToString().Trim() }
 if ($pythonCheckExitCode -ne 0 -or $pythonInfoLine -ne '3|12|True') {
     $detectedPython = ($pythonInfo | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-    throw "Python 3.12 x64 wajib tersedia sebelum setup. Tidak dapat memvalidasinya melalui py.exe -3.12-64. Detail: $detectedPython`nInstal Python 3.12 x64 dari https://www.python.org/downloads/windows/, pastikan Python Launcher terpasang, lalu jalankan setup kembali."
+    throw "Python 3.12 x64 wajib tersedia. Tidak dapat memvalidasinya melalui Python Launcher -3.12-64. Detail: $detectedPython`nInstal Python 3.12 x64 dari https://www.python.org/downloads/windows/ dan pastikan Python Launcher terpasang, lalu jalankan setup kembali."
 }
 
 $venvPath = Join-Path $rootPath '.venv'
@@ -87,7 +124,7 @@ if (Test-Path -LiteralPath $venvPath) {
 }
 
 if (-not $venvValid) {
-    Invoke-Checked -Exe $pythonLauncher.Source -Arguments @('-3.12-64', '-m', 'venv', $venvPath) -FailureMessage 'Gagal membuat virtualenv Python 3.12.'
+    Invoke-Checked -Exe $pythonLauncherPath -Arguments @('-3.12-64', '-m', 'venv', $venvPath) -FailureMessage 'Gagal membuat virtualenv Python 3.12.'
     $createdVenvInfo = & $venvPythonPath '-c' $venvValidationCode $venvPath 2>&1
     $createdVenvExitCode = $LASTEXITCODE
     $createdVenvInfoLine = ''

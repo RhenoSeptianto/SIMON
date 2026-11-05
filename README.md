@@ -12,12 +12,12 @@ Set-Location D:\IT
 git clone https://github.com/RhenoSeptianto/SIMON.git simon
 ```
 
-1. Pasang Python **3.12 x64** dan Git for Windows.
+1. Pasang Git for Windows. Setup otomatis memasang Python **3.12 x64** lewat `winget` jika belum tersedia; PC perlu internet dan `winget`/App Installer.
 2. Jika ingin membawa akun/data saat ini, salin folder `data` secara privat ke `D:\IT\simon\data` sebelum setup. Folder ini tidak masuk GitHub. Hentikan backend sumber saat menyalin database. Jangan salin `.venv`.
 3. Klik kanan `deployment\server\setup-server.bat` -> **Run as administrator**.
 4. Buka **https://172.18.123.92:8443**. Pada instalasi baru, setup meminta password admin (username `admin`) dan password awal 9 akun TS. Database yang sudah ada tidak diubah passwordnya.
 
-Setup memakai Python 3.12 x64, memeriksa dependency dan kesehatan backend, serta mencadangkan `.venv` yang tidak valid sebelum membuat ulang. Semua path operasional dihitung relatif dari root proyek `D:\IT\simon`; database, konfigurasi, sertifikat, dan credential tidak dihapus. Server otomatis hidup saat boot melalui Task Scheduler, tanpa perlu login atau terminal terbuka. Matikan sleep PC kantor. Tidak ada jadwal backup harian otomatis. Log: `data\logs\server.log`. Backup manual tersedia di menu Database (Super Admin).
+Setup memasang Python 3.12 x64 dan dependency server secara otomatis jika belum tersedia, memeriksa dependency dan kesehatan backend, serta mencadangkan `.venv` yang tidak valid sebelum membuat ulang. Jika `winget` tidak ada, setup menampilkan petunjuk instalasi manual. PC perlu internet untuk mengunduh komponen. Semua path operasional dihitung relatif dari root proyek `D:\IT\simon`; database, konfigurasi, sertifikat, dan credential tidak dihapus. Server otomatis hidup saat boot melalui Task Scheduler, tanpa perlu login atau terminal terbuka. Matikan sleep PC kantor. Tidak ada jadwal backup harian otomatis. Log: `data\logs\server.log`. Backup manual tersedia di menu Database (Super Admin).
 
 **Panduan lengkap:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
