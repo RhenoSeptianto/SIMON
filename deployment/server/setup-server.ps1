@@ -130,7 +130,7 @@ if ($venvProcesses) {
     $processIds = ($venvProcesses | ForEach-Object { $_.ProcessId }) -join ', '
     throw "Masih ada proses yang menggunakan .venv (PID: $processIds). Hentikan proses/server tersebut sebelum menjalankan setup."
 }
-$listeners = Get-NetTCPConnection -LocalPort 8443 -State Listen -ErrorAction Stop
+$listeners = @(Get-NetTCPConnection -LocalPort 8443 -State Listen -ErrorAction SilentlyContinue)
 if ($listeners) {
     $listenerIds = ($listeners | Select-Object -ExpandProperty OwningProcess -Unique) -join ', '
     throw "Port 8443 masih digunakan (PID: $listenerIds). Pastikan server SIMON telah berhenti sebelum menjalankan setup."
