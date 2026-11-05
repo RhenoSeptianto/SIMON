@@ -27,6 +27,27 @@ function Invoke-Checked {
     }
 }
 
+function Protect-OperationalData {
+    param(
+        [Parameter(Mandatory = $true)][string]$DataPath,
+        [Parameter(Mandatory = $true)][string]$SetupUserSid
+    )
+
+    $targets = @(
+        Get-ChildItem -LiteralPath $DataPath -Force -Recurse -ErrorAction Stop |
+            Sort-Object { $_.FullName.Length } -Descending |
+            Select-Object -ExpandProperty FullName
+    )
+    $targets += $DataPath
+    foreach ($target in $targets) {
+        Invoke-Checked -Exe 'icacls.exe' -Arguments @(
+            $target, '/inheritance:r', '/grant:r',
+            '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F',
+            '/remove:g', "*$SetupUserSid", '/Q'
+        ) -FailureMessage "Gagal mengamankan permission '$target' untuk SYSTEM dan Administrators."
+    }
+}
+
 function Resolve-PythonLauncher {
     $launcher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
     if ($launcher) { return $launcher.Source }
@@ -176,19 +197,35 @@ if (-not (Test-Path -LiteralPath $requirementsPath -PathType Leaf)) {
 }
 Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'pip', 'install', '-r', $requirementsPath) -FailureMessage 'Instalasi dependency server gagal. Periksa output pip di atas dan kompatibilitas paket dengan Python 3.12.'
 Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'pip', 'check') -FailureMessage 'Pemeriksaan dependency gagal: terdapat dependency yang hilang atau tidak kompatibel.'
-Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'tools.server_setup') -FailureMessage 'Setup konfigurasi SIMON gagal. Periksa error TLS/database di atas.'
 
-$backendCheckCode = 'from backend.main import app; assert app.title; print(app.title)'
-$backendCheck = & $venvPythonPath '-c' $backendCheckCode 2>&1
-$backendCheckExitCode = $LASTEXITCODE
-if ($backendCheckExitCode -ne 0) {
-    $backendDetails = ($backendCheck | Select-Object -Last 20 | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-    throw "Validasi backend gagal saat memuat aplikasi SIMON. Pastikan dependency Python 3.12 terpasang dan database dapat dibuka. Detail:`n$backendDetails"
+$dataPath = Join-Path $rootPath 'data'
+New-Item -ItemType Directory -Path $dataPath -Force | Out-Null
+$setupUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+Invoke-Checked -Exe 'icacls.exe' -Arguments @($dataPath, '/grant:r', "*${setupUserSid}:(OI)(CI)F", '/T', '/Q') -FailureMessage "Gagal memberikan akses sementara ke data untuk akun SID $setupUserSid."
+
+try {
+    Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'tools.server_setup') -FailureMessage "Setup konfigurasi SIMON gagal. Pastikan akun setup dapat menulis database SQLite di '$dataPath' dan periksa error TLS/database di atas."
+
+    $backendCheckCode = 'from backend.main import app; assert app.title; print(app.title)'
+    $backendCheck = & $venvPythonPath '-c' $backendCheckCode 2>&1
+    $backendCheckExitCode = $LASTEXITCODE
+    if ($backendCheckExitCode -ne 0) {
+        $backendDetails = ($backendCheck | Select-Object -Last 20 | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Validasi backend gagal saat memuat aplikasi SIMON. Pastikan dependency Python 3.12 terpasang dan database '$dataPath\siams.db' dapat dibuka. Detail:`n$backendDetails"
+    }
+    $backendCheck | ForEach-Object { Write-Host $_ }
+} catch {
+    $setupFailure = $_.Exception.Message
+    try {
+        Protect-OperationalData -DataPath $dataPath -SetupUserSid $setupUserSid
+    } catch {
+        throw "$setupFailure`nSelain itu, gagal memulihkan permission aman folder data: $($_.Exception.Message)"
+    }
+    throw $setupFailure
 }
-$backendCheck | ForEach-Object { Write-Host $_ }
 
 # Restrict operational database, credentials, and TLS private keys to administrators/SYSTEM.
-Invoke-Checked -Exe 'icacls.exe' -Arguments @((Join-Path $rootPath 'data'), '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '/T', '/Q') -FailureMessage 'Gagal mengamankan permission folder data.'
+Protect-OperationalData -DataPath $dataPath -SetupUserSid $setupUserSid
 
 $certificatePath = Join-Path $rootPath 'data\tls\ca.crt'
 if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) {

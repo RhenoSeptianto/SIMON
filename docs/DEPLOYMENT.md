@@ -21,6 +21,8 @@ Dashboard: https://172.18.123.92:8443. Browser PC admin lain perlu mengimpor **p
 
 Gunakan status-server.bat/stop-server.bat. Untuk menyalakan kembali task: Task Scheduler -> SIMONServer -> Run, atau `Start-ScheduledTask SIMONServer` sebagai admin. Log server berotasi di data/logs/server.log. Hindari menjalankan start-server.bat manual bersamaan dengan task karena port sama.
 
+Saat setup membuat akun/database, akun Windows yang menjalankan setup diberi akses sementara ke `data`; sesudah validasi, permission dikembalikan hanya ke SYSTEM dan Administrators. Jika setup bootstrap gagal, permission aman tersebut tetap dipulihkan.
+
 ## 2. Akun/data yang sudah ada di PC pengembangan
 
 GitHub berisi source, **bukan database dan credential**. Untuk membawa akun/password/inventory yang sekarang: hentikan backend PC pengembangan, salin folder data lewat media/jalur internal secara terpisah ke D:\IT\simon\data **sebelum setup kantor**. Jangan overwrite data PC kantor yang sudah beroperasi. Jangan salin .venv. Jangan salin folder agent state ke PC store lain. Jika tidak membawa data, setup membuat akun baru melalui prompt.
