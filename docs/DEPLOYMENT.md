@@ -52,3 +52,9 @@ Sebagai Administrator, hentikan task SIMONServer, jalankan git pull di D:\IT\sim
 ## GitHub
 
 Upload source saja. .gitignore mengecualikan .venv, data, release, binaries, config, SQLite, log dan private key. Jangan upload ZIP seluruh folder D:\APPWEB\siams-lite; itu dapat membawa data/credential tersembunyi. Template executable diunduh lewat Actions artifact; paket store berisi CA publik dibuat lokal di kantor.
+
+### SQLite unable to open database file saat setup
+
+Installer terbaru mencetak SIMON SQLite check: path database, jenis file/folder, atribut read-only, hasil membuat database uji di folder yang sama, dan hasil membuka/menulis transaksi yang dibatalkan pada database operasional. File siams.db tidak dihapus atau direset. Untuk database di dalam folder data yang dikelola SIMON, installer dapat melepas atribut read-only file; database eksternal tidak diubah atributnya otomatis. Bila gagal, ACL folder/file ditampilkan agar explicit Deny atau masalah lokasi terlihat. Keberhasilan icacls saja belum membuktikan SQLite dapat menulis.
+
+Tarik update kemudian jalankan setup-server.bat sebagai Administrator. Bila masih gagal, kirim seluruh bagian mulai SIMON SQLite check sampai GAGAL beserta output ACL. Jangan membuat database kosong pengganti atau menghapus folder data sebelum penyebabnya diketahui.

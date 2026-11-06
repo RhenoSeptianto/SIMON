@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $rootPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location -LiteralPath $rootPath
 
@@ -236,8 +236,9 @@ foreach ($permissionPath in $permissionPaths) {
 
 try {
     if ($databaseBackend -eq 'sqlite' -and $databasePath -ne ':memory:' -and -not $databasePath.StartsWith('file:')) {
-        $sqliteProbeCode = 'import sqlite3,sys; connection=sqlite3.connect(sys.argv[1],timeout=5); connection.close()'
-        Invoke-Checked -Exe $venvPythonPath -Arguments @('-c', $sqliteProbeCode, $databasePath) -FailureMessage "Akun setup tidak dapat membuka database SQLite '$databasePath'. Periksa permission folder dan file database; untuk DATABASE_URL eksternal, jangan ubah ACL seluruh folder yang mungkin berisi file lain."
+        $probeArguments = @('-m', 'tools.database_doctor', '--database', $databasePath)
+        if ($databaseIsUnderDataPath) { $probeArguments += '--repair-readonly' }
+        Invoke-Checked -Exe $venvPythonPath -Arguments $probeArguments -FailureMessage "Database SQLite '$databasePath' tidak lolos pemeriksaan akses. Baca bagian SIMON SQLite check/GAGAL di atas untuk penyebab spesifik; data tidak dihapus."
     }
 
     Write-Host "Database SIMON: $databaseBackend ($databasePath)"
