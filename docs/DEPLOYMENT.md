@@ -115,3 +115,5 @@ install.log mencatat tahap instalasi dan error; check-agent.bat/status.bat mengh
 ### Default terbaru: mode Startup user
 
 Install.bat kini memasang Startup akun Windows tanpa administrator. Isi kode store, EXE/XML tetap di folder paket dan config/data/log di LocalAppData/SIMON. install-service.bat adalah pilihan service lama yang perlu admin. Untuk store 417, tutup agent manual dengan Ctrl+C sebelum install.bat, pertahankan LocalAppData/SIMON/data. Update script saja cukup git pull dan make-agent-package.bat; tidak perlu rebuild EXE. Uji reboot/login untuk memastikan Startup diizinkan kebijakan PC.
+
+Pembaruan lokasi mode Startup: semua config/CA/launcher/log kini di folder paket drive D, state di SIMONAgent/data. LocalAppData hanya dibaca untuk migrasi identitas lama, tanpa menulis data baru di sana. Tutup agent lama sebelum migrasi dan jalankan install.bat untuk memperbarui shortcut.

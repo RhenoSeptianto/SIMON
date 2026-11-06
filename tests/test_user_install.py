@@ -45,13 +45,14 @@ if($global:launches -ne 1){throw 'Duplicate agent started'}
  script=tmp_path/'harness.ps1';script.write_text(harness,encoding='utf-8-sig')
  result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),'-Package',str(package),'-Local',str(local),'-Startup',str(startup)],capture_output=True,text=True,timeout=25)
  assert result.returncode==0,result.stdout+result.stderr
- config=json.loads((local/'SIMON'/'config.json').read_text(encoding='utf-8-sig'))
- assert config['store_code']=='417' and Path(config['state'])==state
+ config=json.loads((package/'config.json').read_text(encoding='utf-8-sig'))
+ assert config['store_code']=='417' and Path(config['state'])==package/'SIMONAgent'/'data'
  assert Path(config['sentinel_xml'])==package/'SIMONAgent'/'HDSentinel.xml'
  assert json.loads((state/'identity.json').read_text())['uuid']=='store417-existing'
+ assert json.loads((package/'SIMONAgent'/'data'/'identity.json').read_text())['uuid']=='store417-existing'
  link=json.loads((startup/'SIMON Agent.lnk').read_text(encoding='utf-8-sig'))
  assert 'start-user.ps1' in link['Arguments'] and 'Hidden' in link['Arguments']
- assert (local/'SIMON'/'install-user.log').exists()
+ assert (package/'install-user.log').exists()
 
 
 @pytest.mark.skipif(os.name!='nt',reason='Windows launcher integration')
@@ -62,8 +63,9 @@ def test_user_launcher_captures_worker_startup_error_without_touching_real_start
  # Python rejects --config immediately: a safe real process to exercise hidden launch/error logging.
  (user/'launcher.json').write_text(json.dumps({'exe':sys.executable}))
  (user/'config.json').write_text('{}')
+ launcher=user/'start-user.ps1';launcher.write_bytes((root/'deployment'/'agent'/'start-user.ps1').read_bytes())
  env=os.environ.copy();env['LOCALAPPDATA']=str(tmp_path)
- result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(root/'deployment'/'agent'/'start-user.ps1')],env=env,capture_output=True,text=True,timeout=20)
+ result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(launcher)],env=env,capture_output=True,text=True,timeout=20)
  assert result.returncode==0,result.stdout+result.stderr
  log=(user/'startup.log').read_text(encoding='utf-8-sig')
  assert 'Agent dimulai PID' in log and 'exit code 2' in log

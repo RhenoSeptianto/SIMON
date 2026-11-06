@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference='Continue'
-$userDir=Join-Path $env:LOCALAPPDATA 'SIMON'
+$userDir=$PSScriptRoot
 $userConfig=Join-Path $userDir 'config.json'
 $userMode=Test-Path -LiteralPath $userConfig
 $report=if($userMode){Join-Path $userDir 'check-agent.log'}else{Join-Path $PSScriptRoot 'check-agent.log'}

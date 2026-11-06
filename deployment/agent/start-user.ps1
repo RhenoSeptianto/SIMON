@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference='Stop'
-$userDir=Join-Path $env:LOCALAPPDATA 'SIMON'
+$userDir=$PSScriptRoot
 $log=Join-Path $userDir 'startup.log'
 function Write-StartupLog($Message){Add-Content -LiteralPath $log -Value "$(Get-Date -Format s) $Message" -Encoding UTF8}
 $mutex=$null;$locked=$false
@@ -25,6 +25,6 @@ try {
     Write-StartupLog "Agent dimulai PID $($worker.Id)."
     $null=$worker.Handle
     $worker.WaitForExit()
-    Write-StartupLog "Agent berhenti, exit code $($worker.ExitCode). Lihat data\agent.log dan worker-stderr.log."
+    Write-StartupLog "Agent berhenti, exit code $($worker.ExitCode). Lihat SIMONAgent\data\agent.log dan worker-stderr.log."
 } catch {Write-StartupLog "GAGAL: $($_.Exception.Message). Access denied belum membuktikan blokir antivirus.";exit 1}
 finally {if($locked){$mutex.ReleaseMutex()};if($mutex){$mutex.Dispose()}}

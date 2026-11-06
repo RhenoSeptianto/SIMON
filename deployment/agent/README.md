@@ -1,14 +1,18 @@
-# Mode default: Startup user (tanpa Administrator)
+# Mode default: semua file di folder paket drive D
 
-Ekstrak ke D:\SIMONAgent-store, klik dua kali install.bat (atau install-user.bat) sebagai user biasa, isi kode store. Installer membuat shortcut SIMON Agent.lnk di Startup user dan menjalankan peluncur tersembunyi. EXE tetap di SIMONAgent/SIMONAgent.exe; XML tetap di SIMONAgent/HDSentinel.xml. Tidak membuat service atau mengubah kebijakan antivirus.
+1. Ekstrak paket ke D:\SIMONAgent-store (atau folder permanen lain).
+2. Tutup agent manual dengan Ctrl+C; jika agent lama tersembunyi masih aktif, logout/login dahulu.
+3. Klik dua kali install.bat biasa, isi kode store. Installer membuat Startup dan menjalankan agent.
+4. EXE/XML tetap di SIMONAgent/. Config, CA, launcher dan log instalasi/Startup di folder utama paket. Identitas, antrean, agent.log di SIMONAgent/data/.
+5. XML Sentinel: D:\SIMONAgent-store\SIMONAgent\HDSentinel.xml. Arahkan ekspor setiap 10 detik.
 
-Konfigurasi, CA dan log pemasangan/startup ada di %LOCALAPPDATA%/SIMON; identitas/antrean/log agent di %LOCALAPPDATA%/SIMON/data. Lokasi ini sama dengan percobaan manual store 417: jangan dihapus supaya UUID tetap. Jalankan installer di akun Windows yang biasa dipakai store. Agent otomatis aktif setelah akun itu login, tetap berjalan saat layar dikunci dan berhenti saat logout. PC yang otomatis masuk Desktop juga otomatis menjalankan Startup.
+Semua file operasional berada di D; Windows hanya menyimpan shortcut standar SIMON Agent.lnk pada Startup user. Installer membaca identitas lama dari LocalAppData/SIMON/data hanya saat migrasi dan menyalinnya ke D bila belum ada identitas lokal. Sumber lama tidak dihapus. Jika agent masih berjalan saat perlu migrasi, installer meminta dihentikan dahulu agar antrean/UUID tidak rusak. Jangan menyalin folder terpasang beserta data ke PC lain.
 
-Installer tidak menjalankan salinan kedua bila EXE dari lokasi itu masih berjalan. Untuk beralih dari uji manual, tutup agent manual dengan Ctrl+C sebelum instalasi. Setelah instalasi, reboot/login untuk uji Startup. Jalankan check-agent.bat sebagai user biasa untuk memeriksa mode user; event Windows tertentu mungkin hanya tersedia untuk administrator. start-user.bat menjalankan peluncur lagi; uninstall-user.bat menghapus shortcut Startup (agent yang sudah berjalan berhenti saat logout). Jangan menjalankan start.bat/stop.bat/uninstall.bat untuk mode user: file itu khusus service.
+Log langsung di folder paket: install-user.log, install-launcher.log (kode kegagalan launcher BAT), startup.log, worker-stderr.log dan check-agent.log. Log agent: SIMONAgent/data/agent.log. Jalankan check-agent.bat untuk pemeriksaan; start-user.bat untuk menjalankan lagi; uninstall-user.bat menghapus Startup saja. Folder D harus dapat ditulis oleh user. Bila akses ditolak, pesan terlihat di jendela installer; log hanya dapat dibuat jika folder mengizinkan penulisan. Tidak diam-diam memakai LocalAppData sebagai fallback.
 
-Bila kebijakan organisasi memblokir PowerShell, Startup atau EXE, mode ini juga bisa gagal dan tercatat di log sejauh proses sempat berjalan. Script tidak menonaktifkan antivirus atau mengubah kebijakan organisasi. Local process ExecutionPolicy Bypass hanya dipakai oleh launcher BAT/shortcut seperti installer sebelumnya, tidak mengubah setting permanen Windows.
+Setelah instalasi, uji reboot/login. Agent otomatis setelah user login, tetap aktif saat layar dikunci dan berhenti saat logout. Jangan pindahkan folder setelah instalasi. Pengaturan keamanan enterprise tetap dapat memblokir aplikasi/script; installer tidak menonaktifkan antivirus atau mengubah kebijakan permanen Windows.
 
-Untuk paket terbaru dari source server, cukup git pull lalu make-agent-package.bat bila EXE sudah mendukung in_place_install. Tidak perlu rebuild EXE untuk perubahan installer Startup ini. Paket pembaruan SIMON-startup-update.zip hanya berisi script/README; ekstrak ke folder paket agent yang sudah ada tanpa mengganti EXE, CA, XML atau data.
+Update script Startup tidak memerlukan rebuild EXE. Pada server: git pull, lalu make-agent-package.bat. Untuk PC lama, ekstrak SIMON-startup-update.zip ke folder paket, jangan menghapus XML/data, kemudian install.bat.
 
 ## Mode service opsional (memerlukan Administrator)
 
