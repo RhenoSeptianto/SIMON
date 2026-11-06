@@ -1,6 +1,34 @@
 ﻿param([string]$Server='https://172.18.123.92:8443')
 $ErrorActionPreference='Stop'
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Klik kanan install.bat > Run as administrator' }
+function Invoke-AgentAcl {
+    param([string[]]$AclArguments)
+    & icacls.exe @AclArguments | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Gagal mengatur permission agent. Jalankan installer sebagai Administrator.' }
+}
+
+function Restore-AgentSetupAccess {
+    param([string]$Folder,[string]$SetupUserSid)
+    Invoke-AgentAcl -AclArguments @($Folder,'/grant:r',"*${SetupUserSid}:(OI)(CI)F",'/T','/Q')
+    foreach ($file in @(Get-ChildItem -LiteralPath $Folder -File -Force -Recurse -ErrorAction Stop)) {
+        # Repair files left inaccessible by older installers before overwriting CA/config.
+        Invoke-AgentAcl -AclArguments @($file.FullName,'/grant:r',"*${SetupUserSid}:F",'/Q')
+    }
+}
+
+function Protect-AgentData {
+    param([string]$Folder,[string]$SetupUserSid)
+    $targets=@(Get-ChildItem -LiteralPath $Folder -Force -Recurse -ErrorAction Stop | Sort-Object { $_.FullName.Length } -Descending)
+    $targets+=Get-Item -LiteralPath $Folder -Force
+    foreach ($target in $targets) {
+        $rights=if($target.PSIsContainer){'(OI)(CI)F'}else{'F'}
+        $aclArguments=@($target.FullName,'/inheritance:r','/grant:r',"*S-1-5-18:$rights","*S-1-5-32-544:$rights")
+        if($SetupUserSid -notin @('S-1-5-18','S-1-5-32-544')) { $aclArguments+=@('/remove:g',"*$SetupUserSid") }
+        $aclArguments+='/Q'
+        Invoke-AgentAcl -AclArguments $aclArguments
+    }
+}
+
 $uri=[Uri]$Server
 if ($uri.Scheme -ne 'https' -or -not $uri.Host) { throw 'Server harus berupa URL HTTPS' }
 $source=Join-Path $PSScriptRoot 'SIMONAgent'
@@ -19,12 +47,14 @@ if ($existing) {
     (Get-Service SIMONAgent).WaitForStatus('Stopped',[TimeSpan]::FromSeconds(30))
 }
 New-Item -ItemType Directory -Force -Path $destination,$configDir,$stateDir | Out-Null
-Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
-Copy-Item -LiteralPath $ca -Destination (Join-Path $configDir 'ca.crt') -Force
-@{server=$Server.TrimEnd('/');ca_file=(Join-Path $configDir 'ca.crt');state=$stateDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $configDir 'config.json') -Encoding UTF8
-foreach ($folder in @($configDir,$stateDir)) {
-    & icacls.exe $folder /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /Q | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Gagal mengatur permission state/config' }
+$setupSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+try {
+    foreach ($folder in @($configDir,$stateDir)) { Restore-AgentSetupAccess -Folder $folder -SetupUserSid $setupSid }
+    Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
+    Copy-Item -LiteralPath $ca -Destination (Join-Path $configDir 'ca.crt') -Force
+    @{server=$Server.TrimEnd('/');ca_file=(Join-Path $configDir 'ca.crt');state=$stateDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $configDir 'config.json') -Encoding UTF8
+} finally {
+    foreach ($folder in @($configDir,$stateDir)) { Protect-AgentData -Folder $folder -SetupUserSid $setupSid }
 }
 if (-not $existing) { New-Service -Name SIMONAgent -BinaryPathName $binaryPath -DisplayName 'SIMON Hardware Agent' -StartupType Automatic -Description 'Read-only hardware monitoring. Outbound HTTPS only.' | Out-Null }
 & sc.exe config SIMONAgent start= auto | Out-Null

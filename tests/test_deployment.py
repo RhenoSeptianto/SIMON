@@ -58,3 +58,16 @@ def test_source_package_excludes_runtime_and_private_files(tmp_path):
  (tmp_path/'README.md').write_text('docs')
  with zipfile.ZipFile(package_source(tmp_path)) as archive:
   assert set(archive.namelist())=={'README.md','agent/main.py'}
+
+
+def test_store_package_refreshes_installer_without_rebuilding_exe(tmp_path):
+ generate_tls(tmp_path/'data'/'tls')
+ release=tmp_path/'release';release.mkdir()
+ with zipfile.ZipFile(release/'SIMONAgent-template.zip','w') as z:
+  z.writestr('SIMONAgent/SIMONAgent.exe',b'unchanged-binary')
+  z.writestr('install.ps1','old installer')
+ installers=tmp_path/'deployment'/'agent';installers.mkdir(parents=True)
+ (installers/'install.ps1').write_text('fixed installer')
+ with zipfile.ZipFile(make_package(tmp_path)) as z:
+  assert z.read('install.ps1')==b'fixed installer'
+  assert z.read('SIMONAgent/SIMONAgent.exe')==b'unchanged-binary'

@@ -66,3 +66,9 @@ Akar masalah SQLITE_CANTOPEN dan sertifikat yang tidak dapat dibaca berhasil dir
 Health check memakai modul `tools.server_healthcheck` agar kesalahan membaca CA/koneksi dilaporkan lengkap melalui stdout. Windows PowerShell 5.1 tidak lagi memotong traceback di NativeCommandError akibat redirect stderr. Certificate validation tetap aktif dan kegagalan HTTP/TLS tetap membuat setup gagal. Peringatan import Windows Trusted Root tetap ditampilkan bila dibatasi kebijakan kantor.
 
 Tarik update, lalu jalankan ulang setup-server.bat sebagai Administrator di folder proyek yang sama. Tidak perlu pindah folder atau membuat database kosong lagi. Tes regresi memuat fungsi ACL asli melalui PowerShell AST dan memeriksa ACE file database/CA nyata dalam folder uji; tidak memasang task/firewall operasional.
+
+### Agent gagal Copy-Item ProgramData/SIMON/ca.crt
+
+Installer agent diperbaiki agar memulihkan akses file config/CA/state yang terkunci sebelum copy. Grant file memakai F; grant folder memakai (OI)(CI)F. State/UUID/queue dipertahankan, bukan dihapus. Proteksi akhir SYSTEM/Administrators diterapkan di finally meskipun copy gagal. Jangan menjalankan installer lama dari ZIP lama setelah update.
+
+Setelah git pull pada PC kantor, jalankan make-agent-package.bat sebagai Administrator untuk membuat ulang SIMONAgent-store.zip. Binary EXE tidak perlu dibuild ulang: script packaging sekarang menimpa installer dari source checkout terbaru, meskipun template ZIP lama. Kirim paket baru dan jalankan install.bat sebagai Administrator di store. Pengujian mencakup pemulihan file CA dengan DACL kosong dan verifikasi grant SYSTEM/Administrators pada file. Tidak memasang service pada PC developer saat pengujian.

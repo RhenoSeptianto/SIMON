@@ -21,7 +21,8 @@ def main():
    time.sleep(.1)
   else:raise RuntimeError('HTTPS test server not ready')
   subprocess.run([sys.executable,'-m','tools.server_healthcheck','--ca',str(tls/'ca.crt'),'--url',url],cwd=ROOT,check=True,timeout=15)
-  command=[str(exe),'--server',url,'--ca-file',str(tls/'ca.crt'),'--state',str(sandbox/'state'),'--once']
+  config=sandbox/'agent-config.json';config.write_text(json.dumps({'server':url,'ca_file':str(tls/'ca.crt'),'state':str(sandbox/'state')}))
+  command=[str(exe),'--config',str(config),'--once']
   for _ in range(2):subprocess.run(command,check=True,timeout=120,capture_output=True,text=True)
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:
    assert db.execute('select count(*) from devices').fetchone()[0]==1

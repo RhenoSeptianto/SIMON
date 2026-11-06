@@ -12,25 +12,41 @@ def test_healthcheck_reports_ca_failure_without_traceback(tmp_path,capsys):
 
 
 @pytest.mark.skipif(os.name!='nt',reason='Windows ACL regression')
-def test_protect_data_sets_real_file_grants_not_directory_inheritance_flags(tmp_path):
-    script=Path(__file__).resolve().parents[1]/'deployment'/'server'/'setup-server.ps1'
+@pytest.mark.parametrize('kind',['server','agent'])
+def test_protect_data_sets_real_file_grants_not_directory_inheritance_flags(tmp_path,kind):
+    script=Path(__file__).resolve().parents[1]/'deployment'/kind/('setup-server.ps1' if kind=='server' else 'install.ps1')
     # Load just the real ACL function via the PowerShell AST; do not run setup,
     # register services/tasks, change firewall, or touch operational data.
     harness=r'''
-param([string]$Installer,[string]$Sandbox)
+param([string]$Installer,[string]$Sandbox,[string]$Kind)
 $ErrorActionPreference='Stop'
 $tokens=$null;$errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($Installer,[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Installer parse failed'}
-$function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Protect-OperationalData'},$true)
-Invoke-Expression $function.Extent.Text
-function Invoke-Checked {param($Exe,$Arguments,$FailureMessage) & $Exe @Arguments | Out-Null; if($LASTEXITCODE){throw $FailureMessage}}
+if($Kind -eq 'agent') {
+    foreach($name in @('Invoke-AgentAcl','Restore-AgentSetupAccess','Protect-AgentData')) {
+        $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+        Invoke-Expression $function.Extent.Text
+    }
+    function Protect-OperationalData {param($DataPath,$SetupUserSid) Protect-AgentData -Folder $DataPath -SetupUserSid $SetupUserSid}
+} else {
+    $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Protect-OperationalData'},$true)
+    Invoke-Expression $function.Extent.Text
+    function Invoke-Checked {param($Exe,$Arguments,$FailureMessage) & $Exe @Arguments | Out-Null; if($LASTEXITCODE){throw $FailureMessage}}
+}
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $folder=Join-Path $Sandbox 'data';$nested=Join-Path $folder 'tls'
 New-Item -ItemType Directory -Path $nested -Force | Out-Null
 $db=Join-Path $folder 'siams.db';$ca=Join-Path $nested 'ca.crt'
 Set-Content -LiteralPath $db -Value 'fixture';Set-Content -LiteralPath $ca -Value 'fixture'
 try {
+    if($Kind -eq 'agent') {
+        # Reproduce an existing empty-DACL CA file left by the old installer.
+        & icacls.exe $ca /inheritance:r /Q | Out-Null
+        Restore-AgentSetupAccess -Folder $folder -SetupUserSid $sid
+        if((Get-Content -LiteralPath $ca -Raw).Trim() -ne 'fixture'){throw 'Agent CA recovery lost file content'}
+        if((Get-Content -LiteralPath $db -Raw).Trim() -ne 'fixture'){throw 'Agent state file changed during repair'}
+    }
     Protect-OperationalData -DataPath $folder -SetupUserSid $sid
     # This test runs unelevated. Restore owner access to inspect the resulting
     # DACL while retaining the SYSTEM/Administrators entries being asserted.
@@ -51,6 +67,6 @@ try {
 }
 '''
     test_script=tmp_path/'acl-test.ps1';test_script.write_text(harness,encoding='utf-8-sig')
-    result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(test_script),'-Installer',str(script),'-Sandbox',str(tmp_path)],capture_output=True,text=True,timeout=30)
+    result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(test_script),'-Installer',str(script),'-Sandbox',str(tmp_path),'-Kind',kind],capture_output=True,text=True,timeout=30)
     assert result.returncode==0,result.stdout+result.stderr
     assert 'ACL_REGRESSION_OK' in result.stdout

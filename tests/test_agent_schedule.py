@@ -1,4 +1,4 @@
-﻿from datetime import datetime,timezone,timedelta
+from datetime import datetime,timezone,timedelta
 import pytest
 from agent.schedule import StorageSchedule,next_storage_run,WIB
 
@@ -71,7 +71,8 @@ def test_agent_keeps_metrics_interval_and_ignores_old_storage_interval(monkeypat
   try:clock[0],monotonic[0]=next(cycles)
   except StopIteration:raise KeyboardInterrupt
  monkeypatch.setattr(agent.time,'sleep',sleep)
- monkeypatch.setattr('sys.argv',['agent','--state',str(tmp_path)])
+ config=tmp_path/'test-config.json';config.write_text('{}')
+ monkeypatch.setattr('sys.argv',['agent','--config',str(config),'--state',str(tmp_path)])
  with pytest.raises(KeyboardInterrupt):agent.run()
  assert calls['storage']==2  # Startup and 16:00, never every 30 minutes.
  assert calls['metrics']==4  # Includes 08:05 and 16:05 independent of SSD.
