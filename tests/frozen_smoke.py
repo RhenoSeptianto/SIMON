@@ -74,6 +74,17 @@ def main():
   time.sleep(2)
   copies=[p for p in psutil.process_iter(['exe']) if p.info['exe'] and Path(p.info['exe'])==exe]
   assert len(copies)==1 and copies[0].pid==worker.pid
+  alternate=sandbox/'second-install';shutil.copytree(installed,alternate,ignore=shutil.ignore_patterns('data','config.json','*.log','*.pid'))
+  alternate_state=alternate/'data'
+  alternate_config=alternate/'config.json'
+  alternate_config.write_text(json.dumps({'server':url,'ca_file':str(tls/'ca.crt'),'state':str(alternate_state),'sentinel_xml':str(xml),'store_code':'00115'}))
+  second_exe=alternate/'SIMONAgent.exe'
+  subprocess.run([str(second_exe),'--background','--config',str(alternate_config)],check=True,timeout=20,capture_output=True)
+  time.sleep(2)
+  assert worker.is_running()
+  assert not (alternate_state/'identity.json').exists(),'Different folder created a second identity'
+  assert not any(p.info['exe'] and Path(p.info['exe'])==second_exe for p in psutil.process_iter(['exe']))
+  print('PASS: second EXE in a different install/data folder is blocked before creating UUID or reporting.')
   print('PASS: actual EXE shortcut starts a hidden worker, launcher exits, worker survives, and duplicate launch exits.')
   try:
    for _ in range(45):

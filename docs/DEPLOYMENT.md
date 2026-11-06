@@ -121,3 +121,5 @@ Pembaruan lokasi mode Startup: semua config/CA/launcher/log kini di folder paket
 ## Startup native EXE terbaru
 
 Installer dan Startup kini langsung menjalankan SIMONAgent.exe tanpa PowerShell: install.bat -> --install-user; shortcut -> --background --config. Update ini wajib rebuild EXE (manifest 6/native_user_startup), lalu make-agent-package.bat. Semua data/config/log tetap di D. Tidak perlu membiarkan jendela console terbuka. Validasi lokal lewat shortcut sungguhan telah dilakukan; reboot/login store tetap perlu dicoba.
+
+Pencegahan duplikat terbaru (manifest 7/machine_single_instance): kunci Windows Global berlaku per PC/server lintas folder data dan sesi Windows. Installer mode user menolak jika service SIMON lama masih berjalan atau agent dari konfigurasi folder lain terdeteksi aktif untuk server yang sama. Worker service memakai penanda mode service, sehingga tidak menolak dirinya sendiri. Jangan menjalankan service dan Startup bersamaan; pilih satu mode. Update ini wajib rebuild EXE, lalu buat paket baru.

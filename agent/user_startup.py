@@ -4,18 +4,56 @@ from pathlib import Path
 
 _MUTEX=None
 
-def single_instance(state):
+def active_service():
+ if sys.platform!='win32':return None
+ import win32service,pywintypes
+ manager=win32service.OpenSCManager(None,None,win32service.SC_MANAGER_CONNECT)
+ try:
+  try:service=win32service.OpenService(manager,'SIMONAgent',win32service.SERVICE_QUERY_STATUS|win32service.SERVICE_QUERY_CONFIG)
+  except pywintypes.error as error:
+   if error.winerror==1060:return None
+   raise
+  try:
+   if win32service.QueryServiceStatus(service)[1] in (win32service.SERVICE_STOPPED,win32service.SERVICE_STOP_PENDING):return None
+   return win32service.QueryServiceConfig(service)[3]
+  finally:win32service.CloseServiceHandle(service)
+ finally:win32service.CloseServiceHandle(manager)
+
+def conflicting_agent(server):
+ from urllib.parse import urlsplit
+ # Isolated loopback test/development servers have their own namespace.
+ if urlsplit(server).hostname in ('127.0.0.1','localhost','::1'):return None
+ if os.getenv('SIAMS_WINDOWS_SERVICE')!='1':
+  service=active_service()
+  if service:return 'Service SIMONAgent masih aktif: '+service+'. Hentikan/nonaktifkan service lama sebelum memakai mode Startup.'
+ import psutil
+ for process in psutil.process_iter(['pid','name','cmdline']):
+  if process.pid==os.getpid() or (process.info['name'] or '').lower()!='simonagent.exe':continue
+  command=process.info['cmdline'] or []
+  if any(flag in command for flag in ('--background','--install-user','--check-connection','--diagnose','--once','--service')):continue
+  if '--config' in command:
+   try:
+    settings=json.loads(Path(command[command.index('--config')+1]).read_text(encoding='utf-8-sig'))
+    if settings.get('server','').rstrip('/').casefold()==server.rstrip('/').casefold():
+     return 'Agent lain masih aktif (PID '+str(process.pid)+') memakai '+command[command.index('--config')+1]+'. Hentikan agent lama dahulu; jangan buat UUID baru.'
+   except (OSError,ValueError,IndexError):continue
+ return None
+
+def single_instance(state,server):
  global _MUTEX
  if sys.platform!='win32' or not getattr(sys,'frozen',False):return True
- kernel=ctypes.WinDLL('kernel32',use_last_error=True)
- kernel.CreateMutexW.argtypes=[ctypes.c_void_p,ctypes.c_bool,ctypes.c_wchar_p]
- kernel.CreateMutexW.restype=ctypes.c_void_p
- kernel.CloseHandle.argtypes=[ctypes.c_void_p]
- name='Local\\SIMONAgent-'+hashlib.sha256(str(Path(state).resolve()).casefold().encode()).hexdigest()
- handle=kernel.CreateMutexW(None,False,name)
- if not handle:raise ctypes.WinError(ctypes.get_last_error())
- if ctypes.get_last_error()==183:kernel.CloseHandle(handle);return False
- _MUTEX=handle;atexit.register(kernel.CloseHandle,handle);return True
+ conflict=conflicting_agent(server)
+ if conflict:
+  import logging
+  logging.warning('duplicate_agent_blocked: %s',conflict);return False
+ import win32event,win32api,win32security,pywintypes
+ security=pywintypes.SECURITY_ATTRIBUTES()
+ security.SECURITY_DESCRIPTOR=win32security.ConvertStringSecurityDescriptorToSecurityDescriptor('D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;AU)',1)
+ # Global spans logon sessions; the key deliberately excludes installation/state folders.
+ name='Global\\SIMONAgent-'+hashlib.sha256(server.rstrip('/').casefold().encode()).hexdigest()
+ handle=win32event.CreateMutex(security,False,name)
+ if win32api.GetLastError()==183:handle.Close();return False
+ _MUTEX=handle;atexit.register(handle.Close);return True
 
 def background(state,config_path=None):
  state=Path(state);state.mkdir(parents=True,exist_ok=True)
@@ -68,6 +106,8 @@ def install(root,store_code=None,startup=None,launch=True):
   if store_code is None:store_code=input('Kode store'+(' [Enter tetap '+str(settings['store_code'])+']' if settings.get('store_code') else '')+': ').strip() or settings.get('store_code','')
   store_code=str(store_code).strip()
   if not store_code or len(store_code)>40:raise ValueError('Kode store wajib diisi, maksimal 40 karakter.')
+  conflict=conflicting_agent(settings.get('server','https://172.18.123.92:8443'))
+  if conflict:raise ValueError(conflict)
   state=root/'SIMONAgent'/'data';old=legacy/'data'
   if not (state/'identity.json').exists() and (old/'identity.json').exists():
    import psutil

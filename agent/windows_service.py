@@ -25,7 +25,7 @@ class SIMONService(win32serviceutil.ServiceFramework):
             output.replace(log_dir/'service-worker.previous.log')
         # Capture startup/config/import errors that occur before agent.log exists.
         with output.open('ab',buffering=0) as stream:
-            self.worker=subprocess.Popen([str(executable),'--config',str(config)],cwd=executable.parent,env={**os.environ,'SIAMS_WORKER_CAPTURE':'1'},stdout=stream,stderr=subprocess.STDOUT,creationflags=0x08000000)
+            self.worker=subprocess.Popen([str(executable),'--config',str(config)],cwd=executable.parent,env={**os.environ,'SIAMS_WORKER_CAPTURE':'1','SIAMS_WINDOWS_SERVICE':'1'},stdout=stream,stderr=subprocess.STDOUT,creationflags=0x08000000)
 
         servicemanager.LogInfoMsg('SIMONAgent started')
         while win32event.WaitForSingleObject(self.stop_event,1000)==win32event.WAIT_TIMEOUT:

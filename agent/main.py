@@ -40,7 +40,7 @@ def run():
  logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s',handlers=[RotatingFileHandler(state/'agent.log',maxBytes=1048576,backupCount=3,encoding='utf8')]+([] if os.getenv('SIAMS_WORKER_CAPTURE')=='1' else [logging.StreamHandler()]))
  if not args.once and not args.diagnose:
   from agent.user_startup import single_instance
-  if not single_instance(state):
+  if not single_instance(state,args.server):
    logging.info('Agent dengan state yang sama sudah aktif; duplikat dibatalkan.');return
  identity=state/'identity.json'
  if not identity.exists(): save_identity(identity,{'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)})
