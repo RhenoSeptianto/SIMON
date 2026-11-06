@@ -1,6 +1,6 @@
 """Attach ONLY office public CA to the built template. No private keys/data export."""
 from pathlib import Path
-import shutil,zipfile,datetime
+import shutil,zipfile,datetime,json,hashlib
 ROOT=Path(__file__).resolve().parents[1]
 
 def make_package(root=ROOT):
@@ -16,6 +16,12 @@ def make_package(root=ROOT):
    if not path.is_relative_to(target.resolve()):raise RuntimeError('Unsafe archive path')
   archive.extractall(target)
  if not (target/'SIMONAgent'/'SIMONAgent.exe').exists():raise RuntimeError('Template tidak lengkap')
+ manifest=target/'agent-build.json'
+ if not manifest.exists() or not {'sentinel_xml','store_code'}.issubset(json.loads(manifest.read_text(encoding='utf-8')) .get('capabilities',[])):
+  raise RuntimeError('Template agent lama. Build ulang lewat tools/build-agent.bat atau download artifact GitHub terbaru untuk fitur Sentinel dan kode store.')
+ metadata=json.loads(manifest.read_text(encoding='utf-8'))
+ if metadata.get('exe_sha256')!=hashlib.sha256((target/'SIMONAgent'/'SIMONAgent.exe').read_bytes()).hexdigest():raise RuntimeError('Checksum executable template tidak sesuai manifest')
+
  # Refresh installer scripts from this checkout even when the EXE template is older.
  installers=root/'deployment'/'agent'
  if installers.is_dir():

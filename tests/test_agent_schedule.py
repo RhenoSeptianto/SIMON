@@ -1,78 +1,39 @@
-from datetime import datetime,timezone,timedelta
+import json,sqlite3
 import pytest
-from agent.schedule import StorageSchedule,next_storage_run,WIB
 
-def at(day,hour,minute=0,second=0):
- return datetime(2026,11,day,hour,minute,second,tzinfo=WIB).timestamp()
-
-@pytest.mark.parametrize('started,target',[
- (at(6,8),at(6,16)),
- (at(6,15,59,59),at(6,16)),
- (at(6,16),at(7,16)),
- (at(6,21),at(7,16)),
-])
-def test_next_run_uses_wib(started,target):
- assert next_storage_run(started)==target
-
-def test_startup_then_only_at_1600():
- schedule=StorageSchedule(at(6,8))
- assert schedule.is_due(at(6,8))
- schedule.mark_attempt(at(6,8))
- for hour in (9,10,12,15): assert not schedule.is_due(at(6,hour))
- assert not schedule.is_due(at(6,15,59,59))
- assert schedule.is_due(at(6,16))
- schedule.mark_attempt(at(6,16))
- assert not schedule.is_due(at(6,16,0,10))
- assert not schedule.is_due(at(7,15,59,59))
- assert schedule.is_due(at(7,16))
-
-def test_late_start_and_resume_do_not_replay_missed_days():
- schedule=StorageSchedule(at(6,19))
- assert schedule.is_due(at(6,19))
- schedule.mark_attempt(at(6,19))
- assert not schedule.is_due(at(7,8))
- assert schedule.is_due(at(9,10))  # Resuming after several sleeping days.
- schedule.mark_attempt(at(9,10))
- assert not schedule.is_due(at(9,10,0,10))
- assert schedule.is_due(at(9,16))
-
-def test_fixed_utc_offset():
- timestamp=datetime(2026,11,6,8,30,tzinfo=timezone.utc).timestamp()
- assert next_storage_run(timestamp)==datetime(2026,11,6,9,tzinfo=timezone.utc).timestamp()
-
-def test_agent_keeps_metrics_interval_and_ignores_old_storage_interval(monkeypatch,tmp_path):
+def test_agent_watches_sentinel_and_keeps_metrics_interval(monkeypatch,tmp_path):
  import agent.main as agent
- calls={'storage':0,'metrics':0}
- clock=[at(6,8)]
- def collect(kind):
-  calls[kind]+=1
-  return {}
- monkeypatch.setattr(agent,'inventory',lambda:{'hostname':'SCHEDULE-TEST'})
- monkeypatch.setattr(agent,'metrics',lambda:collect('metrics'))
- monkeypatch.setattr(agent,'storage',lambda:collect('storage'))
- monkeypatch.setattr(agent.time,'time',lambda:clock[0])
- monotonic=[0]
- monkeypatch.setattr(agent.time,'monotonic',lambda:monotonic[0])
+ calls={'xml':0,'metrics':0};clock=[0]
+ def metric():calls['metrics']+=1;return {'cpu_usage':10}
+ class Watcher:
+  def __init__(self,path):pass
+  def read_update(self):
+   calls['xml']+=1
+   return {'storage_source':'sentinel','sentinel_status':'fresh','disks':[{'serial_number':str(calls['xml'])}]} if calls['xml']!=2 else None
+ monkeypatch.setattr(agent,'SentinelWatcher',Watcher)
+ monkeypatch.setattr(agent,'inventory',lambda:{'hostname':'TEST'})
+ monkeypatch.setattr(agent,'metrics',metric)
+ monkeypatch.setattr(agent.time,'monotonic',lambda:clock[0])
  monkeypatch.setattr(agent.random,'uniform',lambda a,b:1)
- monkeypatch.setenv('SIAMS_INTERVAL_STORAGE','1')
  monkeypatch.setattr(agent.logging,'basicConfig',lambda **kw:None)
- class Result:
-  def raise_for_status(self):pass
-  def json(self):return {'status':'approved','credential':'test'}
+ monkeypatch.setattr(agent,'RotatingFileHandler',lambda *a,**kw:None)
  class Client:
-  def __init__(self,**kwargs):pass
+  def __init__(self,**kw):pass
   def __enter__(self):return self
   def __exit__(self,*args):pass
-  def post(self,*args,**kwargs):return Result()
+  def post(self,*args,**kw):raise ConnectionError('offline fixture')
  monkeypatch.setattr(agent.httpx,'Client',Client)
- monkeypatch.setattr(agent,'RotatingFileHandler',lambda *a,**kw:None)
- cycles=iter([(at(6,8,5),300),(at(6,16),28800),(at(6,16,5),29100)])
+ cycles=iter([10,300])
  def sleep(seconds):
-  try:clock[0],monotonic[0]=next(cycles)
+  try:clock[0]=next(cycles)
   except StopIteration:raise KeyboardInterrupt
  monkeypatch.setattr(agent.time,'sleep',sleep)
- config=tmp_path/'test-config.json';config.write_text('{}')
+ config=tmp_path/'test-config.json';config.write_text(json.dumps({'store_code':'00115'}))
  monkeypatch.setattr('sys.argv',['agent','--config',str(config),'--state',str(tmp_path)])
  with pytest.raises(KeyboardInterrupt):agent.run()
- assert calls['storage']==2  # Startup and 16:00, never every 30 minutes.
- assert calls['metrics']==4  # Includes 08:05 and 16:05 independent of SSD.
+ assert calls=={'xml':3,'metrics':2}
+ with sqlite3.connect(tmp_path/'queue.db') as db:
+  rows=[json.loads(row[0]) for row in db.execute('select payload from queue')]
+ assert len([r for r in rows if r['kind']=='storage'])==1
+ assert next(r for r in rows if r['kind']=='storage')['payload']['disks'][0]['serial_number']=='3'
+ assert next(r for r in rows if r['kind']=='inventory')['payload']['store_code']=='00115'

@@ -21,7 +21,9 @@ def main():
    time.sleep(.1)
   else:raise RuntimeError('HTTPS test server not ready')
   subprocess.run([sys.executable,'-m','tools.server_healthcheck','--ca',str(tls/'ca.crt'),'--url',url],cwd=ROOT,check=True,timeout=15)
-  config=sandbox/'agent-config.json';config.write_text(json.dumps({'server':url,'ca_file':str(tls/'ca.crt'),'state':str(sandbox/'state')}))
+  xml=sandbox/'HDSentinel.xml'
+  xml.write_text('<Hard_Disk_Sentinel><Physical_Disk_Information_Disk_0><Hard_Disk_Summary><Hard_Disk_Model_ID>Smoke SSD</Hard_Disk_Model_ID><Hard_Disk_Serial_Number>SMOKE-SSD-1</Hard_Disk_Serial_Number><Health>95 %</Health><Performance>100 %</Performance><Current_Temperature>37 C</Current_Temperature></Hard_Disk_Summary></Physical_Disk_Information_Disk_0></Hard_Disk_Sentinel>')
+  config=sandbox/'agent-config.json';config.write_text(json.dumps({'server':url,'ca_file':str(tls/'ca.crt'),'state':str(sandbox/'state'),'sentinel_xml':str(xml),'store_code':'00115'}))
   command=[str(exe),'--config',str(config),'--once']
   for _ in range(2):subprocess.run(command,check=True,timeout=120,capture_output=True,text=True)
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:
@@ -29,9 +31,10 @@ def main():
    status,metrics=db.execute('select status,metrics from devices').fetchone()
    assert status=='approved'
    payload=json.loads(metrics);assert 'cpu_usage' in payload and 'ram_total' in payload
-   assert len(payload['disks'])>=1
-   assert db.execute('select count(*) from telemetry').fetchone()[0]>=4
-  print('PASS: built exe starts, validates office-style CA, enrolls, reports actual Windows hardware, and preserves one UUID across restarts.')
+   assert len(payload['disks'])==1 and payload['disks'][0]['source']=='sentinel'
+   assert db.execute('select store_code from devices').fetchone()[0]=='00115'
+   assert db.execute('select count(*) from telemetry').fetchone()[0]==2
+  print('PASS: built exe starts, validates office-style CA, enrolls, reports Windows inventory/CPU/RAM and Sentinel fixture without disk history, carries store code, and preserves one UUID across restarts.')
   print('EXE:',exe)
   print('ZIP bytes:',(ROOT/'release'/'SIMONAgent-template.zip').stat().st_size)
  finally:

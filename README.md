@@ -36,10 +36,10 @@ PC store harus Windows 10/11 **x64** dan bisa menjangkau `172.18.123.92:8443` me
 
 - Status koneksi: sekitar **2 menit**.
 - CPU/RAM/sisa drive: sekitar **5 menit**.
-- Suhu/health SSD: **saat agent mulai dan pukul 16.00 WIB**.
+- Suhu/health SSD/HDD: **mengikuti perubahan HDSentinel.xml**, umumnya setiap 10 detik sesuai ekspor Sentinel.
 - Inventory statis: saat mulai dan setiap 24 jam.
 
-Interval heartbeat/metrics/inventory memakai jitter 10%, dapat dikonfigurasi lewat `SIAMS_INTERVAL_HEARTBEAT`, `SIAMS_INTERVAL_METRICS`, `SIAMS_INTERVAL_INVENTORY` (detik). Jadwal SSD menggunakan WIB eksplisit dan mengabaikan `SIAMS_INTERVAL_STORAGE` lama. Sensor tidak tersedia = N/A. Wear nol bukan berarti sisa umur 100%. Refresh dashboard mengambil kiriman terakhir, tidak menjalankan koleksi paksa.
+Interval heartbeat/metrics/inventory memakai jitter 10%, dapat dikonfigurasi lewat `SIAMS_INTERVAL_HEARTBEAT`, `SIAMS_INTERVAL_METRICS`, `SIAMS_INTERVAL_INVENTORY` (detik). Pemeriksaan disk tidak lagi memakai jadwal 16.00 atau PowerShell; agent hanya membaca XML saat file berubah. Variabel `SIAMS_INTERVAL_STORAGE` lama diabaikan. Sensor tidak tersedia = N/A. Wear nol bukan berarti sisa umur 100%. Refresh dashboard mengambil kiriman terakhir, tidak menjalankan koleksi paksa.
 
 Antrean offline dibatasi 2.000 event (event tertua dibuang saat penuh), timeout HTTP 15 detik, collector PowerShell 35 detik. Retry backoff maksimal 300 detik. Log agent berotasi 1 MiB, 4 file. Histori telemetry disimpan default 30 hari, dibersihkan saat ingestion. UUID stabil meskipun IP/hostname berubah.
 
@@ -79,3 +79,14 @@ Browser test opsional memakai Microsoft Edge dan database sementara. Build agent
 `python -m tools.package_source` membuat `release/SIMON-source.zip` dengan source terpilih untuk upload GitHub. Jangan upload seluruh folder proyek sebagai ZIP: `.venv`, `data`, `release`, database, private key dan credential harus tetap lokal. CI otomatis membuild template agent melalui GitHub Actions setelah source diupload. Panduan restore dan update ada pada docs/DEPLOYMENT.md.
 
 Binary berhasil dibuild dan diuji mengirim hardware aktual melalui HTTPS, namun service startup/recovery/reboot, koneksi VPN, dan dampak CPU/RAM pada PC store tetap perlu pilot sebelum rollout. Binary belum code-signed. [Status implementasi](docs/STATUS.md) mencatat batas fitur produksi yang belum selesai.
+
+
+## Hard Disk Sentinel dan kode store
+
+Pada PC store, atur Sentinel untuk mengekspor XML otomatis tiap 10 detik ke `C:\Program Files\SIMON\HDSentinel.xml`. Installer meminta kode store, mempertahankan nol di depan (contoh 00115), dan menyimpannya sebagai metadata perangkat. Saat update installer, Enter mempertahankan kode lama. Kode tampil di Devices/detail PC/CSV/XLSX dan dapat dicari. Ini bukan relasi store-user: assignment user tetap langsung ke PC.
+
+Agent memantau timestamp/ukuran file sekitar 5?8 detik sekali, membaca file yang berubah dengan validasi ukuran/stabilitas/XML, mencocokkan disk lewat serial, lalu mengirim ringkasan. Tidak menjalankan disk scan Windows/PowerShell. File missing/partial/error/stale (>2 menit) ditampilkan tanpa menghapus kondisi terakhir. Waktu laporan dan status pemantauan dari XML ditampilkan agar data tidak disalahartikan sebagai pengukuran langsung. Health dan performance adalah nilai Sentinel, bukan wear. Total kapasitas memakai jumlah sektor dikali bytes per sector jika tersedia. Data disk terbaru pada detail diperiksa ulang setiap 10 detik saat jendela terbuka.
+
+Snapshot disk disimpan hanya sebagai kondisi terbaru, bukan baris histori. Antrean offline disk juga digabung menjadi snapshot terbaru. Histori CPU/RAM/drive tetap 5 menit. Alert menyimpan health turun dibanding laporan sebelumnya, health di bawah batas (default 80%, environment SENTINEL_HEALTH_WARNING), suhu >65 C, dan perubahan identitas disk; kondisi berulang dideduplikasi. Saat agent offline, perubahan sementara yang tidak sempat dikirim tidak dijamin masuk riwayat alert. File XML asli dan informasi registrasi Sentinel tidak diupload ke GitHub.
+
+Update ini **memerlukan build EXE baru**. Urutan: git pull pada kantor, jalankan setup-server.bat untuk memperbarui server/migrasi kolom kode store, jalankan tools/build-agent.bat atau download template GitHub Actions terbaru, lalu make-agent-package.bat. Template lama ditolak lewat manifest/checksum agar agent jadwal lama tidak terselip dalam paket baru. Install ulang paket baru di store, isi kode store, dan pastikan Sentinel memperbarui XML. Identitas/queue/assignment tetap dipertahankan.

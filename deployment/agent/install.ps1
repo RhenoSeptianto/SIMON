@@ -1,4 +1,4 @@
-﻿param([string]$Server='https://172.18.123.92:8443')
+﻿param([string]$Server='https://172.18.123.92:8443',[string]$StoreCode='')
 $ErrorActionPreference='Stop'
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Klik kanan install.bat > Run as administrator' }
 function Invoke-AgentAcl {
@@ -50,9 +50,19 @@ New-Item -ItemType Directory -Force -Path $destination,$configDir,$stateDir | Ou
 $setupSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 try {
     foreach ($folder in @($configDir,$stateDir)) { Restore-AgentSetupAccess -Folder $folder -SetupUserSid $setupSid }
+    $configPath=Join-Path $configDir 'config.json'
+    $previousCode=''
+    if(Test-Path -LiteralPath $configPath) { $previousCode=(Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json).store_code }
+    if(-not $StoreCode) {
+        $prompt=if($previousCode){"Kode store (Enter untuk tetap $previousCode)"}else{'Masukkan kode store'}
+        $StoreCode=Read-Host $prompt
+        if(-not $StoreCode -and $previousCode) { $StoreCode=$previousCode }
+    }
+    $StoreCode=$StoreCode.Trim()
+    if(-not $StoreCode -or $StoreCode.Length -gt 40) { throw 'Kode store wajib diisi, maksimal 40 karakter. Jalankan installer lagi.' }
     Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
     Copy-Item -LiteralPath $ca -Destination (Join-Path $configDir 'ca.crt') -Force
-    @{server=$Server.TrimEnd('/');ca_file=(Join-Path $configDir 'ca.crt');state=$stateDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $configDir 'config.json') -Encoding UTF8
+    @{server=$Server.TrimEnd('/');ca_file=(Join-Path $configDir 'ca.crt');state=$stateDir;store_code=$StoreCode;sentinel_xml=(Join-Path $env:ProgramFiles 'SIMON\HDSentinel.xml')} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $configDir 'config.json') -Encoding UTF8
 } finally {
     foreach ($folder in @($configDir,$stateDir)) { Protect-AgentData -Folder $folder -SetupUserSid $setupSid }
 }
@@ -66,4 +76,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Gagal mengatur recovery flag' }
 Start-Service SIMONAgent
 Write-Host 'SIMONAgent terpasang. Otomatis berjalan saat Windows dinyalakan, tanpa login.'
 Write-Host "Server: $Server"
+Write-Host "Kode store: $StoreCode"
+Write-Host "Sumber disk: $env:ProgramFiles\SIMON\HDSentinel.xml"
 Write-Host "Log: $stateDir\agent.log"

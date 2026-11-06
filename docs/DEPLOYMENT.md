@@ -43,7 +43,7 @@ Buka status.bat. Perangkat muncul otomatis di SIMON, Super Admin memilih TS lang
 
 PC store harus Windows 10/11 **x64** dan bisa menjangkau 172.18.123.92 melalui LAN/VPN. Tes `Test-NetConnection 172.18.123.92 -Port 8443`. Tidak membuka port inbound di store. Jika gagal, perbaiki routing/VPN/firewall; IP private tidak dapat diakses lewat internet biasa. Store yang tidak terhubung jaringan kantor belum bisa rollout.
 
-Jadwal: SSD saat agent mulai dan 16.00 WIB; CPU/RAM/drive sekitar 5 menit; heartbeat sekitar 2 menit. Log berotasi, queue 2.000 event. Service LocalSystem diperlukan untuk pembacaan reliability counter. Binary belum code-signed. Uji pilot 1–2 PC store, reboot, offline/reconnect dan beban CPU/RAM sebelum rollout masal. Installer/service tidak boleh dianggap lulus uji boot hanya karena binary berhasil dibuild.
+Data disk: mengikuti perubahan XML Sentinel (sekitar 10 detik); CPU/RAM/drive sekitar 5 menit; heartbeat sekitar 2 menit. Log berotasi, queue 2.000 event. Service LocalSystem dipakai untuk boot tanpa login dan akses konfigurasi/state yang dilindungi. Pembacaan SMART hardware dilakukan Sentinel, bukan agent. Binary belum code-signed. Uji pilot 1–2 PC store, reboot, offline/reconnect dan beban CPU/RAM sebelum rollout masal. Installer/service tidak boleh dianggap lulus uji boot hanya karena binary berhasil dibuild.
 
 ## 5. Update source kantor
 
@@ -72,3 +72,17 @@ Tarik update, lalu jalankan ulang setup-server.bat sebagai Administrator di fold
 Installer agent diperbaiki agar memulihkan akses file config/CA/state yang terkunci sebelum copy. Grant file memakai F; grant folder memakai (OI)(CI)F. State/UUID/queue dipertahankan, bukan dihapus. Proteksi akhir SYSTEM/Administrators diterapkan di finally meskipun copy gagal. Jangan menjalankan installer lama dari ZIP lama setelah update.
 
 Setelah git pull pada PC kantor, jalankan make-agent-package.bat sebagai Administrator untuk membuat ulang SIMONAgent-store.zip. Binary EXE tidak perlu dibuild ulang: script packaging sekarang menimpa installer dari source checkout terbaru, meskipun template ZIP lama. Kirim paket baru dan jalankan install.bat sebagai Administrator di store. Pengujian mencakup pemulihan file CA dengan DACL kosong dan verifikasi grant SYSTEM/Administrators pada file. Tidak memasang service pada PC developer saat pengujian.
+
+
+## Sentinel XML dan kode store (versi terbaru)
+
+1. Update server lebih dahulu: git pull, lalu setup-server.bat. Kolom store_code ditambahkan pada database lama secara idempotent, tanpa menghapus device, akun, atau assignment.
+2. Build template EXE baru melalui tools/build-agent.bat atau artifact GitHub Actions terbaru. Binary lama belum mendukung Sentinel/kode store; make-agent-package.bat menolak template tanpa capability manifest dan checksum yang sesuai.
+3. Buat ulang paket store dan jalankan install.bat sebagai Administrator. Isi kode store (contoh 00115). Update berikutnya dapat memakai Enter untuk mempertahankan kode lama.
+4. Atur Sentinel mengekspor XML setiap 10 detik ke C:\Program Files\SIMON\HDSentinel.xml. Pastikan Sentinel juga berjalan otomatis serta memiliki izin menulis di folder tersebut. Agent tidak menginstal/mengonfigurasi Sentinel atau mengubah frekuensi scan Sentinel. Jika Sentinel belum berjalan setelah boot, status missing/stale muncul dan agent terus memantau sampai XML tersedia.
+
+Agent memantau metadata file sekitar 5?8 detik, membaca perubahan lengkap dan mengirim snapshot disk. Tidak ada lagi jadwal 16.00/pemeriksaan storage lewat PowerShell. CPU/RAM/drive tetap sekitar 5 menit, heartbeat sekitar 2 menit. Dashboard detail mengambil nilai disk terbaru setiap 10 detik tanpa mereset tab atau dropdown assignment.
+
+Disk diidentifikasi berdasarkan serial (fallback model+lokasi hanya jika tersedia). Health/performance tidak ditafsirkan sebagai wear. Ringkasan hanya mengambil field disk/report yang diperlukan; informasi registrasi Sentinel tidak dikirim. XML missing/partial/stale lebih dari 2 menit ditandai, data valid terakhir dipertahankan. Ekspor XML tiap 10 detik bukan jaminan hardware Sentinel benar-benar melakukan scan tiap 10 detik; waktu/status pemantauan dari laporan tetap ditampilkan.
+
+Tidak menyimpan histori snapshot disk. Antrean storage offline digabung menjadi snapshot terakhir. Histori CPU/RAM tetap, serta riwayat alert deduplicated untuk suhu >65 C, health di bawah batas (default 80%), health turun, dan perubahan identitas disk. Perubahan sementara selama offline mungkin tidak masuk riwayat karena snapshot offline digabung. Kode store hanya metadata tampilan/filter/ekspor; akses TS tetap berdasarkan assignment PC langsung.

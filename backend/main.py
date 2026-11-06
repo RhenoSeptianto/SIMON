@@ -5,7 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Response, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Text, UniqueConstraint, inspect
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Text, UniqueConstraint, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -25,7 +25,7 @@ class Store(Base):
  id=Column(Integer,primary_key=True); code=Column(String,unique=True); name=Column(String); area=Column(String,default=''); region=Column(String,default=''); active=Column(Integer,default=1)
 class Device(Base):
  __tablename__='devices'
- id=Column(Integer,primary_key=True); uuid=Column(String,unique=True); hostname=Column(String); ip=Column(String); serial=Column(String); status=Column(String,default='pending'); store_id=Column(Integer,ForeignKey('stores.id'),nullable=True); claim=Column(String); credential=Column(String,nullable=True); created=Column(Float,default=now); last_seen=Column(Float,default=0); inventory=Column(Text,default='{}'); metrics=Column(Text,default='{}')
+ id=Column(Integer,primary_key=True); store_code=Column(String(40),default='',nullable=False); uuid=Column(String,unique=True); hostname=Column(String); ip=Column(String); serial=Column(String); status=Column(String,default='pending'); store_id=Column(Integer,ForeignKey('stores.id'),nullable=True); claim=Column(String); credential=Column(String,nullable=True); created=Column(Float,default=now); last_seen=Column(Float,default=0); inventory=Column(Text,default='{}'); metrics=Column(Text,default='{}')
 class DeletedDevice(Base):
  __tablename__='deleted_devices'
  uuid=Column(String,primary_key=True); deleted_at=Column(Float,default=now)
@@ -43,6 +43,9 @@ class Alert(Base):
  id=Column(Integer,primary_key=True); device_id=Column(Integer,ForeignKey('devices.id'),index=True); category=Column(String); message=Column(String); status=Column(String,default='active'); created=Column(Float,default=now)
 migrate_access=not inspect(engine).has_table('user_device_access')
 Base.metadata.create_all(engine)
+# Add display-only store code to existing SQLite/PostgreSQL installations.
+if 'store_code' not in {column['name'] for column in inspect(engine).get_columns('devices')}:
+ with engine.begin() as connection: connection.execute(text("ALTER TABLE devices ADD COLUMN store_code VARCHAR(40) NOT NULL DEFAULT ''"))
 with DB() as migration:
  if migrate_access:
   for old_user in migration.query(User).all():
@@ -80,7 +83,7 @@ def device(s,id,u):
  if not d or not allowed(u,d): raise HTTPException(404,'Perangkat tidak ditemukan')
  return d
 def serialize(d):
- return {'id':d.id,'uuid':d.uuid,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<int(os.getenv('OFFLINE_SECONDS','420')),'last_seen':d.last_seen,'inventory':json.loads(d.inventory),'metrics':json.loads(d.metrics)}
+ return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<int(os.getenv('OFFLINE_SECONDS','420')),'last_seen':d.last_seen,'inventory':json.loads(d.inventory),'metrics':json.loads(d.metrics)}
 class Login(BaseModel):
  username:str; password:str
 attempts={}
@@ -149,7 +152,7 @@ def edit_user(id:int,v:UserInput,u=Depends(admin),s:Session=Depends(db)):
  audit(s,u.id,'edit_user',id); s.commit(); return {'ok':True}
 @app.get('/api/devices')
 def devices(q:str='',store_id:int|None=None,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
- rows=[serialize(d) for d in visible(s,u) if q.lower() in (d.hostname+' '+(d.ip or '')).lower() and (store_id is None or d.store_id==store_id)]
+ rows=[serialize(d) for d in visible(s,u) if q.lower() in (d.hostname+' '+(d.ip or '')+' '+d.store_code).lower() and (store_id is None or d.store_id==store_id)]
  size=max(1,min(limit_,200)); start=(max(page,1)-1)*size
  return {'total':len(rows),'items':rows[start:start+size]}
 @app.get('/api/devices/{id}')
@@ -209,9 +212,12 @@ def enroll(v:Enrollment,request:Request,s:Session=Depends(db)):
  d=s.query(Device).filter_by(uuid=v.uuid).first()
  if d:
   if not hmac.compare_digest(d.claim,digest(v.claim)): raise HTTPException(403)
-  if d.status=='approved': d.last_seen=now(); s.commit()
+  if d.status=='approved':
+   d.last_seen=now()
+   if 'store_code' in v.inventory: d.store_code=str(v.inventory['store_code']).strip()[:40]
+   s.commit()
   return {'status':d.status}
- i=v.inventory; d=Device(uuid=v.uuid,claim=digest(v.claim),hostname=str(i.get('hostname','Unknown'))[:160],ip=str(i.get('primary_ip',''))[:64],serial=str(i.get('bios_serial',''))[:160],inventory=json.dumps(i),status='approved',last_seen=now()); s.add(d); audit(s,'agent','auto_enrollment',v.uuid); s.commit(); return {'status':'approved'}
+ i=v.inventory; d=Device(store_code=str(i.get('store_code','')).strip()[:40],uuid=v.uuid,claim=digest(v.claim),hostname=str(i.get('hostname','Unknown'))[:160],ip=str(i.get('primary_ip',''))[:64],serial=str(i.get('bios_serial',''))[:160],inventory=json.dumps(i),status='approved',last_seen=now()); s.add(d); audit(s,'agent','auto_enrollment',v.uuid); s.commit(); return {'status':'approved'}
 class Claim(BaseModel):
  uuid:str; claim:str
 @app.post('/api/agent/claim')
@@ -229,28 +235,65 @@ def agent(request:Request,s:Session=Depends(db)):
  d=s.query(Device).filter_by(credential=digest(token),status='approved').first()
  if not d: raise HTTPException(401,'Credential perangkat tidak valid')
  return d
+_last_telemetry_cleanup=0
 class Telemetry(BaseModel):
  event_id:str=Field(max_length=80); collected_at:float; kind:str; payload:dict
 @app.post('/api/agent/report')
 def report(v:Telemetry,d=Depends(agent),s:Session=Depends(db)):
+ global _last_telemetry_cleanup
  if v.kind not in ('heartbeat','inventory','metrics','storage'): raise HTTPException(422)
  if len(json.dumps(v.payload))>200000: raise HTTPException(413)
  d=s.get(Device,d.id); d.last_seen=now()
  if v.kind=='inventory':
   d.inventory=json.dumps(v.payload); d.hostname=str(v.payload.get('hostname',d.hostname)); d.ip=str(v.payload.get('primary_ip',d.ip)); d.serial=str(v.payload.get('bios_serial',d.serial))
+  if 'store_code' in v.payload: d.store_code=str(v.payload['store_code']).strip()[:40]
  elif v.kind!='heartbeat':
-  if not s.query(Sample).filter_by(event_id=v.event_id).first():
+  m=json.loads(d.metrics); previous=dict(m)
+  # Only CPU/RAM samples create history. Storage is an upsert of latest state.
+  if v.kind=='metrics' and not s.query(Sample).filter_by(event_id=v.event_id).first():
    s.add(Sample(device_id=d.id,event_id=v.event_id,collected=v.collected_at,payload=json.dumps(v.payload)))
-   m=json.loads(d.metrics)
-   if v.collected_at>=m.get(v.kind+'_at',0): m.update(v.payload); m[v.kind+'_at']=v.collected_at; d.metrics=json.dumps(m)
-   evaluate(s,d,m)
- s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete(); s.commit(); return {'ok':True}
-def evaluate(s,d,m):
- checks={'disk_free':(any(x.get('free_percent',100)<10 for x in m.get('volumes',[])),'Ruang disk kurang dari 10%'),'temperature':(any((x.get('temperature_c') or 0)>65 for x in m.get('disks',[])),'Suhu disk di atas 65 C'),'disk_health':(any(x.get('health_status') not in (None,'Healthy','Unknown') for x in m.get('disks',[])),'Kondisi physical disk perlu diperiksa')}
- for cat,(bad,msg) in checks.items():
-  a=s.query(Alert).filter(Alert.device_id==d.id,Alert.category==cat,Alert.status!='resolved').first()
-  if bad and not a: s.add(Alert(device_id=d.id,category=cat,message=msg))
-  elif not bad and a: a.status='resolved'
+  if v.collected_at>=m.get(v.kind+'_at',0):
+   m.update(v.payload); m[v.kind+'_at']=v.collected_at; d.metrics=json.dumps(m)
+   evaluate(s,d,m,previous)
+ cleanup_due=now()-_last_telemetry_cleanup>=3600
+ if cleanup_due: s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete()
+ s.commit()
+ if cleanup_due: _last_telemetry_cleanup=now()
+ return {'ok':True}
+def evaluate(s,d,m,previous=None):
+ previous=previous or {}
+ def condition(category,bad,message):
+  alert=s.query(Alert).filter(Alert.device_id==d.id,Alert.category==category,Alert.status!='resolved').first()
+  if bad and not alert: s.add(Alert(device_id=d.id,category=category,message=message))
+  elif not bad and alert: alert.status='resolved'
+ def event(category,message):
+  alert=s.query(Alert).filter(Alert.device_id==d.id,Alert.category==category,Alert.status!='resolved').first()
+  if not alert: s.add(Alert(device_id=d.id,category=category,message=message))
+  else: alert.message=message; alert.status='active'
+ condition('disk_free',any(x.get('free_percent',100)<10 for x in m.get('volumes',[])),'Ruang disk kurang dari 10%')
+ if m.get('storage_source')!='sentinel':
+  condition('temperature',any((x.get('temperature_c') or 0)>65 for x in m.get('disks',[])),'Suhu disk di atas 65 C')
+  condition('disk_health',any(x.get('health_status') not in (None,'Healthy','Unknown') for x in m.get('disks',[])),'Kondisi physical disk perlu diperiksa')
+  return
+ # Do not clear existing disk alerts based on missing, partial, or stale reports.
+ if m.get('sentinel_status')!='fresh': return
+ condition('temperature',False,''); condition('disk_health',False,'')
+ disks=m.get('disks',[])
+ old={x.get('disk_identity'):x for x in previous.get('disks',[]) if x.get('source')=='sentinel'} if previous.get('storage_source')=='sentinel' else {}
+ threshold=float(os.getenv('SENTINEL_HEALTH_WARNING','80'))
+ for disk in disks:
+  identity=disk.get('disk_identity')
+  if not identity: continue
+  key=digest(identity)[:16];label=f"{disk.get('model') or 'Disk'} ({disk.get('serial_number') or identity})"
+  temperature=disk.get('temperature_c');health=disk.get('health_percent')
+  if temperature is not None: condition('temperature:'+key,temperature>65,f'{label}: suhu di atas 65 C')
+  if health is not None: condition('disk_health:'+key,health<threshold,f'{label}: Health Sentinel {health}% (batas {threshold}%)')
+  before=old.get(identity,{}).get('health_percent')
+  if health is not None and before is not None:
+   if health<before: event('health_drop:'+key,f'{label}: Health Sentinel turun dari {before}% menjadi {health}%')
+   elif health>before: condition('health_drop:'+key,False,'')
+ if old and set(old)!={x.get('disk_identity') for x in disks}:
+  event('component_change','Identitas physical disk berubah; periksa disk yang diganti, ditambah, atau dilepas')
 @app.get('/api/alerts')
 def alerts(u=Depends(user),s:Session=Depends(db)):
  ids=[x.id for x in visible(s,u)]; return [{'id':x.id,'device_id':x.device_id,'category':x.category,'message':x.message,'status':x.status,'created':x.created} for x in s.query(Alert).filter(Alert.device_id.in_(ids)).order_by(Alert.id.desc()).limit(500)]
@@ -264,9 +307,9 @@ def summary(u=Depends(user),s:Session=Depends(db)):
  ds=[serialize(d) for d in visible(s,u)]; return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(not s.query(UserDeviceAccess).filter_by(device_id=d['id']).first() for d in ds)}
 @app.get('/api/reports/{format}')
 def export(format:str,u=Depends(user),s:Session=Depends(db)):
- rows=[['Hostname','IP','Serial','Status','RAM bytes','Disks']]
+ rows=[['Kode Store','Hostname','IP','Serial','Status','RAM bytes','Disks']]
  for d in visible(s,u):
-  m=json.loads(d.metrics); rows.append([d.hostname,d.ip,d.serial,d.status,m.get('ram_total'),json.dumps(m.get('disks',[]))])
+  m=json.loads(d.metrics); rows.append([d.store_code,d.hostname,d.ip,d.serial,d.status,m.get('ram_total'),json.dumps(m.get('disks',[]))])
  rows=[["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in r] for r in rows]
  if format=='csv':
   f=io.StringIO(); csv.writer(f).writerows(rows); data=io.BytesIO(('\ufeff'+f.getvalue()).encode()); mime='text/csv'

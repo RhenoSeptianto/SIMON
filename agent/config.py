@@ -13,7 +13,7 @@ def load_config(path=None):
         return {}
     result=json.loads(target.read_text(encoding='utf-8-sig'))
     if not isinstance(result,dict): raise ValueError('Config harus berupa JSON object')
-    for key in ('ca_file','state'):
+    for key in ('ca_file','state','sentinel_xml'):
         if result.get(key) and not Path(result[key]).is_absolute(): result[key]=str(target.parent/result[key])
     return result
 

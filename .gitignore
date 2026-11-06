@@ -19,3 +19,6 @@ release/
 *.db-*
 config.json
 identity.json
+
+# Local hardware report contains workstation identifiers.
+sentinel/
