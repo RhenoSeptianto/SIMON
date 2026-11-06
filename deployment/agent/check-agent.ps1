@@ -12,8 +12,6 @@ try {
     $settings=$null
     if($userMode){
         $settings=Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
-        $launcher=Get-Content -LiteralPath (Join-Path $userDir 'launcher.json') -Raw | ConvertFrom-Json
-        $exe=$launcher.exe;$folder=Split-Path -Parent $exe
         Write-Host 'Mode Startup user: service tidak diperlukan.'
         $startupLink=Join-Path ([Environment]::GetFolderPath('Startup')) 'SIMON Agent.lnk'
         Write-Host "Shortcut Startup ada: $(Test-Path -LiteralPath $startupLink)"

@@ -1,5 +1,5 @@
 """Run built executable against a temporary HTTPS server, not the operational DB."""
-import os,sys,tempfile,subprocess,socket,time,json,sqlite3,shutil
+import os,sys,tempfile,subprocess,socket,time,json,sqlite3,shutil,psutil
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from tools.server_setup import generate_tls
@@ -45,7 +45,36 @@ def main():
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:
    db.execute("insert into users(name,username,password,role,active,stores) values(?,?,?,?,?,?)",('Smoke Admin','smokeadmin',hashed,'super_admin',1,'[]'))
   live_started=time.time()
-  worker=subprocess.Popen(command[:-1],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=0x08000000)
+  # Exercise actual native installation and an actual .lnk, using a fake Startup folder.
+  from agent.user_startup import install
+  shutil.copy2(tls/'ca.crt',sandbox/'ca.crt')
+  root_config=sandbox/'config.json'
+  root_config.write_text(json.dumps({'server':url,'ca_file':'ca.crt','state':str(installed/'data'),'sentinel_xml':str(xml),'store_code':'00115'}))
+  startup=sandbox/'fake-startup';startup.mkdir()
+  setup=subprocess.run([str(exe),'--install-user','--store-code','00115','--help'],capture_output=True,text=True,timeout=20)
+  assert setup.returncode==0 and '--install-user' in setup.stdout
+  native_install=subprocess.run([str(exe),'--install-user','--store-code','00115','--startup-folder',str(startup)],capture_output=True,text=True,timeout=30)
+  assert native_install.returncode==0,native_install.stdout+native_install.stderr
+  print('PASS: frozen EXE installer creates actual shortcut/config and launches worker without PowerShell.')
+  pidfile=sandbox/'background.pid'
+  for _ in range(40):
+   if pidfile.exists():break
+   time.sleep(.25)
+  else:raise RuntimeError('Native shortcut did not start background agent')
+  worker=psutil.Process(int(pidfile.read_text()))
+  os.startfile(str(startup/'SIMON Agent.lnk'))
+  time.sleep(2)
+  assert worker.is_running()
+  import win32gui,win32process
+  windows=[]
+  win32gui.EnumWindows(lambda hwnd,_:windows.append(hwnd) if win32process.GetWindowThreadProcessId(hwnd)[1]==worker.pid and win32gui.IsWindowVisible(hwnd) else None,None)
+  assert not windows,'Background agent opened a visible window'
+  # Repeated Startup invocation must not create a second persistent worker.
+  subprocess.run([str(exe),'--background','--config',str(root_config)],check=True,timeout=20,capture_output=True)
+  time.sleep(2)
+  copies=[p for p in psutil.process_iter(['exe']) if p.info['exe'] and Path(p.info['exe'])==exe]
+  assert len(copies)==1 and copies[0].pid==worker.pid
+  print('PASS: actual EXE shortcut starts a hidden worker, launcher exits, worker survives, and duplicate launch exits.')
   try:
    for _ in range(45):
     with sqlite3.connect(sandbox/'db'/'siams.db') as db: current=json.loads(db.execute('select metrics from devices').fetchone()[0])
@@ -64,7 +93,7 @@ def main():
       after=records[0];break
      time.sleep(1)
     else:raise RuntimeError('Agent did not reenroll after delete')
-    assert worker.poll() is None
+    assert worker.is_running()
     assert after['uuid']==before['uuid'] and after['store_code']=='00115'
     with sqlite3.connect(sandbox/'db'/'siams.db') as db:
      assert db.execute('select count(*) from devices').fetchone()[0]==1

@@ -117,3 +117,7 @@ Log pemasangan: `install.log` di folder paket. Jalankan `check-agent.bat` sebaga
 Default install.bat kini memasang mode Startup user tanpa administrator. Isi kode store; installer menyimpan config/CA di LocalAppData/SIMON, memakai state LocalAppData/SIMON/data (kompatibel percobaan manual), membuat shortcut Startup dan menjalankan agent. EXE/XML tetap di folder paket drive D. Otomatis setelah user login, bukan sebelum login. install-service.bat tetap tersedia untuk mode service. Lihat deployment/agent/README.md untuk pembaruan dan pemeriksaan log.
 
 Pembaruan lokasi mode Startup: semua config/CA/launcher/log kini di folder paket drive D, state di SIMONAgent/data. LocalAppData hanya dibaca untuk migrasi identitas lama, tanpa menulis data baru di sana. Tutup agent lama sebelum migrasi dan jalankan install.bat untuk memperbarui shortcut.
+
+## Startup native EXE terbaru
+
+Installer dan Startup kini langsung menjalankan SIMONAgent.exe tanpa PowerShell: install.bat -> --install-user; shortcut -> --background --config. Update ini wajib rebuild EXE (manifest 6/native_user_startup), lalu make-agent-package.bat. Semua data/config/log tetap di D. Tidak perlu membiarkan jendela console terbuka. Validasi lokal lewat shortcut sungguhan telah dilakukan; reboot/login store tetap perlu dicoba.

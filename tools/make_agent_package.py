@@ -17,8 +17,8 @@ def make_package(root=ROOT):
   archive.extractall(target)
  if not (target/'SIMONAgent'/'SIMONAgent.exe').exists():raise RuntimeError('Template tidak lengkap')
  manifest=target/'agent-build.json'
- if not manifest.exists() or not {'sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install'}.issubset(json.loads(manifest.read_text(encoding='utf-8')) .get('capabilities',[])):
-  raise RuntimeError('Template agent lama. Build ulang lewat tools/build-agent.bat atau download artifact GitHub terbaru untuk fitur instalasi satu folder, Sentinel, kode store, dan pembaruan 10 detik.')
+ if not manifest.exists() or not {'sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup'}.issubset(json.loads(manifest.read_text(encoding='utf-8')) .get('capabilities',[])):
+  raise RuntimeError('Template agent lama. Build ulang lewat tools/build-agent.bat atau download artifact GitHub terbaru untuk Startup native EXE tanpa PowerShell (manifest 6/native_user_startup).')
  metadata=json.loads(manifest.read_text(encoding='utf-8'))
  if metadata.get('exe_sha256')!=hashlib.sha256((target/'SIMONAgent'/'SIMONAgent.exe').read_bytes()).hexdigest():raise RuntimeError('Checksum executable template tidak sesuai manifest')
 
