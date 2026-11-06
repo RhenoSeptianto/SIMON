@@ -93,3 +93,10 @@ Tidak menyimpan histori snapshot disk. Antrean storage offline digabung menjadi 
 Versi terbaru menyederhanakan pengelolaan perangkat menjadi Hapus saja; tombol/API Revoke tidak digunakan. Penghapusan menghapus histori/alert/assignment, tetapi agent yang masih berjalan dapat mendaftar kembali memakai UUID/kode store yang sama pada pengiriman berikutnya. Credential lama tidak berlaku setelah delete; EXE baru menangani 401 dengan enrollment ulang, mempertahankan identity dan queue serta memaksa pembaruan metrics/Sentinel. Assignment TS yang dihapus tidak dikembalikan otomatis. Untuk PC yang tidak ingin muncul kembali, hentikan/uninstall service secara lokal.
 
 Update server lalu gunakan template EXE terbaru (manifest format 3, capability reenrollment_after_delete), buat ulang paket dan install ulang di store. Installer mempertahankan UUID/config/kode store. Paket menolak executable lama yang belum mendukung pemulihan credential. Perubahan UI suhu: simbol derajat ditulis dengan entity HTML untuk menghindari '?C' akibat encoding; sensor kosong tetap N/A.
+
+
+## Update bahasa dan laporan Excel (server saja)
+
+Tarik source terbaru lalu jalankan setup-server.bat sebagai Administrator untuk memulai ulang backend. Browser Ctrl+F5. Agent tidak perlu diubah/dibuild ulang untuk fitur ini. UI Storage menerjemahkan pesan Sentinel di server, menyimpan teks sumber asli. Jika pesan belum dikenali, tampil pemberitahuan bahasa Indonesia untuk memeriksa Sentinel; tidak menyimpulkan disk sehat.
+
+Menu Laporan mengekspor XLSX saja dengan tiga sheet Perangkat, SSD-HDD, Kapasitas Drive. CSV dinonaktifkan. Semua sheet dibatasi oleh akses PC user, termasuk disk/volume. Kode store string menjaga nol di depan; sel numerik/tanggal memiliki tipe yang benar, filter dan freeze header tersedia, teks asing tidak dijalankan sebagai formula. File menggunakan tanggal WIB.

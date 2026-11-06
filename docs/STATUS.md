@@ -71,3 +71,12 @@ Tampilan suhu menggunakan &deg;C agar tidak berubah menjadi ?C karena encoding. 
 Validasi unit/integrasi: 38 tes lulus, termasuk 401 recovery tanpa mengganti UUID, delete/re-enroll, penanda deleted lama, penghapusan assignment, serta regresi seluruh alur lain. Tes browser memastikan simbol derajat tampil benar dan tidak ada tombol Revoke. Uji EXE hidup melalui HTTPS dilakukan terpisah menggunakan server/database sementara; tidak memasang service pada sistem operasional.
 
 Uji EXE final lulus: satu proses agent tetap hidup, PC dihapus lewat API dashboard, XML berubah, agent menerima 401 lalu kembali terdaftar dengan UUID/kode store yang sama dan mengirim metrics/Sentinel baru. Server tes menggunakan HTTPS dengan CA tervalidasi; database tes memastikan hanya histori CPU baru yang tersisa.
+
+
+## Lokalisasi Sentinel dan Excel saja
+
+Terjemahan offline/server untuk pesan umum Sentinel, status pemantauan dengan tanggal/jam Indonesia, perkiraan umur dan saran. Deskripsi masalah mempertahankan jumlah/severity yang dikenali. Pesan yang tidak dikenali menggunakan pemberitahuan untuk memeriksa Sentinel; teks sumber tidak ditimpa. Dua disk pada XML contoh lokal berhasil diterjemahkan penuh. Label Kesehatan/Performa/catatan diperbarui pada Storage.
+
+Menu Laporan dan ekspor XLSX tunggal dengan tiga sheet terstruktur: Perangkat, SSD-HDD, Kapasitas Drive. Seluruh sheet dibatasi visible devices, satu disk/volume per baris, nilai GiB/persen bertipe angka, timestamp Excel WIB, kode store teks, filter/freeze header/style/wrapping, mitigasi formula dan control character. Endpoint CSV mengembalikan 404. Filename SIMON-Inventaris-YYYY-MM-DD.xlsx. Agent tidak berubah/tidak perlu rebuild.
+
+Validasi: 41 pytest lulus termasuk terjemahan sehat/bermasalah/jumlah error/unknown, report 3 sheet, pemisahan disk/drive, nilai/satuan/tanggal, leading zeros, formula safety, akses user dan workbook kosong. Browser desktop/mobile/light/dark lulus, mengunduh file Excel aktual dan memeriksa sheet, memastikan CSV tidak tampil, serta memeriksa teks Indonesia pada detail Sentinel dan pembaruan live. Tidak ada JavaScript error. Koneksi/boot service agent tidak diuji ulang karena tidak diubah.

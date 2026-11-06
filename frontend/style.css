@@ -7,3 +7,5 @@ dialog.device-dialog{width:min(960px,94vw);max-width:960px;height:min(820px,92dv
 .store-code{font-weight:600;font-variant-numeric:tabular-nums}.disk-numbers{flex-wrap:wrap;gap:18px}
 
 .temperature-unit{font-size:.75em;font-weight:500}.temperature-high{color:#cf535a}
+
+.report-single{max-width:820px}.report-sheets{list-style:none;padding:0;margin:0 0 24px}.report-sheets li{padding:14px 0;border-top:1px solid var(--line)}.report-sheets b,.report-sheets span{display:block}.report-sheets span{font-size:12px;color:var(--muted);margin-top:4px}

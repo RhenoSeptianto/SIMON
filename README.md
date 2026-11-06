@@ -45,7 +45,7 @@ Antrean offline dibatasi 2.000 event (event tertua dibuang saat penuh), timeout 
 
 ## Dashboard
 
-Overview, Devices dengan pencarian/status/pagination, detail PC bertab, grafik CPU/RAM interaktif, assignment TS melalui dropdown, Users, Alerts storage, CSV/XLSX Reports, Audit, dan Database backup/reset. Reset memerlukan konfirmasi RESET, membuat backup terlebih dahulu, menghapus data monitoring tetapi mempertahankan akun/password dan audit. Semua user bisa mengganti password sendiri, minimal satu karakter. Perubahan password mengakhiri seluruh sesi akun.
+Overview, Devices dengan pencarian/status/pagination, detail PC bertab, grafik CPU/RAM interaktif, assignment TS melalui dropdown, Users, Alerts storage, Laporan Excel tiga sheet, Audit, dan Database backup/reset. Reset memerlukan konfirmasi RESET, membuat backup terlebih dahulu, menghapus data monitoring tetapi mempertahankan akun/password dan audit. Semua user bisa mengganti password sendiri, minimal satu karakter. Perubahan password mengakhiri seluruh sesi akun.
 
 Hapus PC menghapus histori, alert dan assignment. Jika agent masih aktif, perangkat otomatis mendaftar dan mengirim data kembali dengan UUID/kode store yang sama; assignment TS perlu diberikan lagi. Tidak ada tombol Revoke. Untuk menghentikan pengiriman seterusnya, hentikan/uninstall service pada PC store. Menghapus dari dashboard tidak menghentikan service Windows dari jarak jauh.
 
@@ -83,7 +83,7 @@ Binary berhasil dibuild dan diuji mengirim hardware aktual melalui HTTPS, namun 
 
 ## Hard Disk Sentinel dan kode store
 
-Pada PC store, atur Sentinel untuk mengekspor XML otomatis tiap 10 detik ke `C:\Program Files\SIMON\HDSentinel.xml`. Installer meminta kode store, mempertahankan nol di depan (contoh 00115), dan menyimpannya sebagai metadata perangkat. Saat update installer, Enter mempertahankan kode lama. Kode tampil di Devices/detail PC/CSV/XLSX dan dapat dicari. Ini bukan relasi store-user: assignment user tetap langsung ke PC.
+Pada PC store, atur Sentinel untuk mengekspor XML otomatis tiap 10 detik ke `C:\Program Files\SIMON\HDSentinel.xml`. Installer meminta kode store, mempertahankan nol di depan (contoh 00115), dan menyimpannya sebagai metadata perangkat. Saat update installer, Enter mempertahankan kode lama. Kode tampil di Devices/detail PC/Excel dan dapat dicari. Ini bukan relasi store-user: assignment user tetap langsung ke PC.
 
 Agent memantau timestamp/ukuran file sekitar 5?8 detik sekali, membaca file yang berubah dengan validasi ukuran/stabilitas/XML, mencocokkan disk lewat serial, lalu mengirim ringkasan. Tidak menjalankan disk scan Windows/PowerShell. File missing/partial/error/stale (>2 menit) ditampilkan tanpa menghapus kondisi terakhir. Waktu laporan dan status pemantauan dari XML ditampilkan agar data tidak disalahartikan sebagai pengukuran langsung. Health dan performance adalah nilai Sentinel, bukan wear. Total kapasitas memakai jumlah sektor dikali bytes per sector jika tersedia. Data disk terbaru pada detail diperiksa ulang setiap 10 detik saat jendela terbuka.
 
@@ -93,3 +93,12 @@ Update ini **memerlukan build EXE baru**. Urutan: git pull pada kantor, jalankan
 
 
 Pendaftaran ulang setelah hapus membutuhkan EXE terbaru dengan capability reenrollment_after_delete. Agent yang menerima HTTP 401 membuang credential yang tidak berlaku, menyimpan UUID/claim secara atomik, lalu enrollment ulang pada siklus berikutnya. Queue tetap dipertahankan, snapshot Sentinel dan metrics dipaksa dikirim lagi. Jika installer/agent lama masih terpasang, update paket agar mekanisme ini tersedia. Tampilan suhu memakai simbol derajat HTML (&deg;C) dan N/A untuk data kosong.
+
+
+## Bahasa Indonesia dan laporan Excel
+
+Keterangan, saran, status pemantauan, perkiraan sisa umur dan waktu laporan Sentinel ditampilkan dalam bahasa Indonesia. Terjemahan deterministik/offline dilakukan server saat penyajian; data sumber tetap disimpan untuk diagnosis. Pesan yang belum dikenali tidak ditebak sebagai kondisi sehat: pengguna diarahkan memeriksa laporan Sentinel. Atribut teknis yang belum mempunyai padanan dapat dipertahankan sebagai identitas agar dapat dicocokkan dengan Sentinel.
+
+Menu Laporan hanya menyediakan Excel: endpoint /api/reports/xlsx. Format CSV tidak lagi tersedia. File SIMON-Inventaris-YYYY-MM-DD.xlsx menggunakan tanggal WIB dan memiliki sheet Perangkat, SSD-HDD (nama sheet Excel tidak mendukung karakter /), serta Kapasitas Drive. Satu disk/volume per baris, judul kolom bahasa Indonesia, satuan GiB/persen, header dibekukan, tabel/filter, lebar kolom dan pembungkusan teks. Kode store dipertahankan sebagai teks, nilai numerik tetap angka, tanggal menjadi tanggal Excel, dan teks dari perangkat tidak dieksekusi sebagai formula. Nilai kosong ditulis Tidak tersedia.
+
+Terjemahan dan Excel ini hanya memerlukan update/restart server serta Ctrl+F5 pada browser. Tidak memerlukan perubahan config, installer atau rebuild agent.

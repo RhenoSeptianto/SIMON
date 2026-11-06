@@ -122,10 +122,11 @@ def test_store_code_is_searchable_exported_and_does_not_grant_access():
  result=c.get('/api/devices?q=00115').json()
  assert result['total']==1 and result['items'][0]['id']==id
  assert result['items'][0]['store_code']=='00115'
- csv=c.get('/api/reports/csv').text
- assert '00115' in csv and 'VISIBLE' in csv and 'HIDDEN' not in csv
+ assert c.get('/api/reports/csv').status_code==404
  wb=load_workbook(BytesIO(c.get('/api/reports/xlsx').content))
  assert wb.active.cell(2,1).value=='00115'
+ values=[value for sheet in wb for row in sheet.values for value in row]
+ assert 'VISIBLE' in values and 'HIDDEN' not in values
 
 
 

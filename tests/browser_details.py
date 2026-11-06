@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright,expect
 import httpx
 with DB() as s:
  s.add_all([User(name='QA Admin',username='qaadmin',password=password('1'),role='super_admin'),User(name='QA TS',username='qats',password=password('1'),role='ts')])
- d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44}]}))
+ d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44,'sentinel_tip':'No actions needed.','power_state':'Inactive (without monitoring) (since 11/6/2026 3:58:38 PM)','estimated_remaining_lifetime':'more than 414 days','sentinel_description':'The status of the solid state disk is PERFECT. Problematic or weak sectors were not found.'}]}))
  s.add(d);s.flush();did=d.id
  for index in range(4):s.add(Sample(device_id=did,event_id=str(uuid.uuid4()),collected=time.time()-7200+index*300,payload=json.dumps({'cpu_usage':20+index,'ram_percent':50+index})))
  s.commit()
@@ -30,8 +30,18 @@ try:
   for theme in ('light','dark'):
    page.evaluate("dark => document.body.classList.toggle('dark', dark)",theme=='dark')
    for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database'):
-    page.get_by_role('button',name=section,exact=True).click()
-    expect(page.locator('#content h2')).to_have_text(section)
+    page.get_by_role('button',name='Laporan' if section=='Reports' else section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else section)
+    if section=='Reports':
+     expect(page.get_by_role('link',name='Unduh Excel')).to_be_visible()
+     expect(page.locator('a[href="/api/reports/csv"]')).to_have_count(0)
+     if theme=='light':
+      with page.expect_download() as download_info:page.get_by_role('link',name='Unduh Excel').click()
+      download=download_info.value
+      assert download.suggested_filename.startswith('SIMON-Inventaris-') and download.suggested_filename.endswith('.xlsx')
+      download.save_as(str(target/'laporan-qa.xlsx'))
+      from openpyxl import load_workbook
+      assert load_workbook(target/'laporan-qa.xlsx').sheetnames==['Perangkat','SSD-HDD','Kapasitas Drive']
     if section=='Alerts':
      expect(page.get_by_text('Belum ada peringatan',exact=True)).to_be_visible()
      assert 'Jalankan agent' not in page.locator('#content').inner_text()
@@ -41,8 +51,8 @@ try:
      page.screenshot(path=str(target/f'{section.lower()}-{theme}.png'),full_page=True)
    page.set_viewport_size({'width':390,'height':844})
    for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database'):
-    page.get_by_role('button',name=section,exact=True).click()
-    expect(page.locator('#content h2')).to_have_text(section)
+    page.get_by_role('button',name='Laporan' if section=='Reports' else section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else section)
     assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),section
    page.screenshot(path=str(target/f'dashboard-mobile-{theme}.png'),full_page=True)
    page.set_viewport_size({'width':1280,'height':900})
@@ -65,10 +75,15 @@ try:
   dialog=page.locator('dialog');expect(dialog).to_be_visible();expect(dialog.get_by_text('24%',exact=True)).to_be_visible()
   expect(dialog.locator('.monitoring-schedule')).to_have_count(0)
   expect(page.locator('#panel-overview').get_by_text('Tersisa 80%',exact=True)).to_be_visible()
-  page.get_by_role('tab',name='Storage',exact=True).click();expect(dialog.get_by_text('QA SSD',exact=True)).to_be_visible();expect(dialog.get_by_text('Health 95%',exact=True)).to_be_visible();expect(dialog.get_by_text('100%',exact=True)).to_be_visible();expect(dialog.get_by_text('Store 00115',exact=True)).to_be_visible();expect(dialog.get_by_text('44 \u00b0C',exact=True)).to_be_visible()
+  page.get_by_role('tab',name='Storage',exact=True).click();expect(dialog.get_by_text('QA SSD',exact=True)).to_be_visible();expect(dialog.get_by_text('Kesehatan 95%',exact=True)).to_be_visible();expect(dialog.get_by_text('100%',exact=True)).to_be_visible();expect(dialog.get_by_text('Store 00115',exact=True)).to_be_visible();expect(dialog.get_by_text('44 \u00b0C',exact=True)).to_be_visible()
+  dialog.locator('#physicalDisks summary').click()
+  expect(dialog.get_by_text('Tidak perlu tindakan.',exact=True)).to_be_visible()
+  expect(dialog.get_by_text('Lebih dari 414 hari',exact=True)).to_be_visible()
+  expect(dialog.get_by_text('Tidak aktif (tanpa pemantauan) sejak 6 November 2026, 15.58.38',exact=True)).to_be_visible()
+  assert 'The status of' not in dialog.inner_text()
   with DB() as s:
    live=s.get(Device,did);values=json.loads(live.metrics);values['disks'][0]['health_percent']=94;live.metrics=json.dumps(values);s.commit()
-  expect(dialog.get_by_text('Health 94%',exact=True)).to_be_visible(timeout=15000)
+  expect(dialog.get_by_text('Kesehatan 94%',exact=True)).to_be_visible(timeout=15000)
   page.get_by_role('tab',name='Histori',exact=True).click();expect(page.locator('#historySlider')).to_be_visible()
   expect(page.locator('#historyTooltip')).to_contain_text('CPU 23%')
   page.locator('#historySlider').focus();page.keyboard.press('Home');expect(page.locator('#historyTooltip')).to_contain_text('CPU 20%')

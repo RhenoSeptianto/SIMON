@@ -4,6 +4,12 @@ from fastapi.testclient import TestClient
 from backend.main import app,DB,User,password,Sample,Device
 client=TestClient(app)
 H={'X-SIAMS-Request':'1'}
+def report_values(client):
+ from openpyxl import load_workbook
+ from io import BytesIO
+ w=load_workbook(BytesIO(client.get('/api/reports/xlsx').content))
+ return [value for sheet in w for row in sheet.values for value in row]
+
 def test_full_flow_and_permissions():
  with DB() as s:
   s.add(User(name='Admin',username='admin',password=password('secure-pass-123'),role='super_admin')); s.commit()
@@ -31,7 +37,7 @@ def test_full_flow_and_permissions():
  assert outsider.get(f'/api/devices/{d}').status_code==404
  assert outsider.get(f'/api/devices/{d}/history').status_code==404
  assert outsider.get('/api/devices').json()['total']==0
- assert 'TEST-PC' not in outsider.get('/api/reports/csv').text
+ assert 'TEST-PC' not in report_values(outsider)
  assert support.post('/api/users',json={},headers=H).status_code==403
  assert client.post('/api/agent/claim',json={'uuid':uid,'claim':claim}).json()['credential']==token
  assert client.put('/api/users/2',json={'name':'support','username':'support','role':'ts','devices':[]},headers=H).status_code==200
@@ -90,7 +96,7 @@ def test_super_admin_all_devices_and_session_lifecycle():
  c=TestClient(app)
  assert c.post('/api/login',json={'username':'sessionadmin','password':'secure-pass-123'}).status_code==200
  assert c.get(f'/api/devices/{did}').status_code==200
- assert 'UNASSIGNED-PC' in c.get('/api/reports/csv').text
+ assert 'UNASSIGNED-PC' in report_values(c)
  values={'name':'Renamed Admin','username':'sessionadmin','role':'super_admin','devices':[did]}
  assert c.put(f'/api/users/{uid}',json=values,headers=H).status_code==200
  assert c.get('/api/me').json()['name']=='Renamed Admin'

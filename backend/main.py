@@ -1,4 +1,4 @@
-import os, json, secrets, hashlib, hmac, time, csv, io
+import os, json, secrets, hashlib, hmac, time, io
 from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Query
@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Text, UniqueConstraint, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
+from backend.localization import localize_metrics
 
 ROOT=Path(__file__).resolve().parents[1]
 DATA=Path(os.getenv('SIAMS_DATA',str(ROOT/'data'))); DATA.mkdir(parents=True,exist_ok=True)
@@ -83,7 +84,7 @@ def device(s,id,u):
  if not d or not allowed(u,d): raise HTTPException(404,'Perangkat tidak ditemukan')
  return d
 def serialize(d):
- return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<int(os.getenv('OFFLINE_SECONDS','420')),'last_seen':d.last_seen,'inventory':json.loads(d.inventory),'metrics':json.loads(d.metrics)}
+ return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<int(os.getenv('OFFLINE_SECONDS','420')),'last_seen':d.last_seen,'inventory':json.loads(d.inventory),'metrics':localize_metrics(json.loads(d.metrics))}
 class Login(BaseModel):
  username:str; password:str
 attempts={}
@@ -300,19 +301,10 @@ def summary(u=Depends(user),s:Session=Depends(db)):
  ds=[serialize(d) for d in visible(s,u)]; return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(not s.query(UserDeviceAccess).filter_by(device_id=d['id']).first() for d in ds)}
 @app.get('/api/reports/{format}')
 def export(format:str,u=Depends(user),s:Session=Depends(db)):
- rows=[['Kode Store','Hostname','IP','Serial','Status','RAM bytes','Disks']]
- for d in visible(s,u):
-  m=json.loads(d.metrics); rows.append([d.store_code,d.hostname,d.ip,d.serial,d.status,m.get('ram_total'),json.dumps(m.get('disks',[]))])
- rows=[["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in r] for r in rows]
- if format=='csv':
-  f=io.StringIO(); csv.writer(f).writerows(rows); data=io.BytesIO(('\ufeff'+f.getvalue()).encode()); mime='text/csv'
- elif format=='xlsx':
-  from openpyxl import Workbook
-  w=Workbook(); sheet=w.active
-  for r in rows: sheet.append(r)
-  data=io.BytesIO(); w.save(data); data.seek(0); mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
- else: raise HTTPException(404)
- return StreamingResponse(data,media_type=mime,headers={'Content-Disposition':f'attachment; filename="simon-inventory.{format}"'})
+ if format!='xlsx':raise HTTPException(404,'Laporan hanya tersedia dalam format Excel (.xlsx)')
+ from backend.reports import inventory_workbook
+ data,filename=inventory_workbook(visible(s,u),serialize)
+ return StreamingResponse(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f'attachment; filename="{filename}"'})
 @app.get('/api/audit')
 def audits(u=Depends(admin),s:Session=Depends(db)): return [{'actor':x.actor,'action':x.action,'target':x.target,'timestamp':x.timestamp} for x in s.query(Audit).order_by(Audit.id.desc()).limit(200)]
 def super_admin(u=Depends(user)):
