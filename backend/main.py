@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Text, UniqueConstraint, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from backend.localization import localize_metrics
 
@@ -26,7 +27,7 @@ class Store(Base):
  id=Column(Integer,primary_key=True); code=Column(String,unique=True); name=Column(String); area=Column(String,default=''); region=Column(String,default=''); active=Column(Integer,default=1)
 class Device(Base):
  __tablename__='devices'
- id=Column(Integer,primary_key=True); store_code=Column(String(40),default='',nullable=False); uuid=Column(String,unique=True); hostname=Column(String); ip=Column(String); serial=Column(String); status=Column(String,default='pending'); store_id=Column(Integer,ForeignKey('stores.id'),nullable=True); claim=Column(String); credential=Column(String,nullable=True); created=Column(Float,default=now); last_seen=Column(Float,default=0); inventory=Column(Text,default='{}'); metrics=Column(Text,default='{}')
+ id=Column(Integer,primary_key=True); store_code=Column(String(40),default='',nullable=False); store_code_key=Column(String(160),nullable=True); uuid=Column(String,unique=True); hostname=Column(String); ip=Column(String); serial=Column(String); status=Column(String,default='pending'); store_id=Column(Integer,ForeignKey('stores.id'),nullable=True); claim=Column(String); credential=Column(String,nullable=True); created=Column(Float,default=now); last_seen=Column(Float,default=0); inventory=Column(Text,default='{}'); metrics=Column(Text,default='{}')
 class DeletedDevice(Base):
  __tablename__='deleted_devices'
  uuid=Column(String,primary_key=True); deleted_at=Column(Float,default=now)
@@ -47,6 +48,10 @@ Base.metadata.create_all(engine)
 # Add display-only store code to existing SQLite/PostgreSQL installations.
 if 'store_code' not in {column['name'] for column in inspect(engine).get_columns('devices')}:
  with engine.begin() as connection: connection.execute(text("ALTER TABLE devices ADD COLUMN store_code VARCHAR(40) NOT NULL DEFAULT ''"))
+# A nullable normalized key keeps blank legacy codes compatible; the DB enforces concurrent claims.
+if 'store_code_key' not in {column['name'] for column in inspect(engine).get_columns('devices')}:
+ with engine.begin() as connection: connection.execute(text('ALTER TABLE devices ADD COLUMN store_code_key VARCHAR(160)'))
+with engine.begin() as connection: connection.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS uq_device_store_code_key ON devices (store_code_key)'))
 with DB() as migration:
  if migrate_access:
   for old_user in migration.query(User).all():
@@ -205,6 +210,27 @@ def history(id:int,hours:int=Query(default=24,ge=1,le=168),u=Depends(user),s:Ses
  device(s,id,u)
  rows=s.query(Sample).filter(Sample.device_id==id,Sample.collected>=now()-hours*3600).order_by(Sample.collected.desc()).limit(5000).all()
  return [{'collected_at':x.collected,**json.loads(x.payload)} for x in reversed(rows)]
+def store_conflict(code,owner=None):
+ name=owner.hostname if owner else 'perangkat lain'
+ return HTTPException(409,detail=f'Kode store {code} sudah digunakan oleh PC {name}. Gunakan kode lain atau lepaskan kode dari perangkat lama melalui admin.')
+
+def set_store_code(s,d,value):
+ code=str(value or '').strip()
+ if len(code)>40: raise HTTPException(422,'Kode store maksimal 40 karakter')
+ key=code.casefold()
+ # Inspect legacy rows too: existing duplicates are retained, never silently deleted/moved.
+ owner=next((other for other in s.query(Device).filter(Device.store_code!='').all() if other.id!=d.id and other.store_code.strip().casefold()==key),None) if key else None
+ if owner: raise store_conflict(code,owner)
+ d.store_code=code;d.store_code_key=key or None
+
+def commit_store(s,code):
+ try:s.commit()
+ except IntegrityError:
+  s.rollback()
+  owner=s.query(Device).filter_by(store_code_key=str(code).strip().casefold()).first()
+  if owner:raise store_conflict(code,owner)
+  raise
+
 class Enrollment(BaseModel):
  uuid:str=Field(min_length=32,max_length=64); claim:str=Field(min_length=40,max_length=200); inventory:dict
 @app.post('/api/agent/enroll')
@@ -216,10 +242,10 @@ def enroll(v:Enrollment,request:Request,s:Session=Depends(db)):
   if not hmac.compare_digest(d.claim,digest(v.claim)): raise HTTPException(403)
   if d.status=='approved':
    d.last_seen=now()
-   if 'store_code' in v.inventory: d.store_code=str(v.inventory['store_code']).strip()[:40]
-   s.commit()
+   if 'store_code' in v.inventory: set_store_code(s,d,v.inventory['store_code'])
+   commit_store(s,d.store_code)
   return {'status':d.status}
- i=v.inventory; d=Device(store_code=str(i.get('store_code','')).strip()[:40],uuid=v.uuid,claim=digest(v.claim),hostname=str(i.get('hostname','Unknown'))[:160],ip=str(i.get('primary_ip',''))[:64],serial=str(i.get('bios_serial',''))[:160],inventory=json.dumps(i),status='approved',last_seen=now()); s.add(d); audit(s,'agent','auto_enrollment',v.uuid); s.commit(); return {'status':'approved'}
+ i=v.inventory; d=Device(uuid=v.uuid,claim=digest(v.claim),hostname=str(i.get('hostname','Unknown'))[:160],ip=str(i.get('primary_ip',''))[:64],serial=str(i.get('bios_serial',''))[:160],inventory=json.dumps(i),status='approved',last_seen=now()); set_store_code(s,d,i.get('store_code','')); s.add(d); audit(s,'agent','auto_enrollment',v.uuid); commit_store(s,d.store_code); return {'status':'approved'}
 class Claim(BaseModel):
  uuid:str; claim:str
 @app.post('/api/agent/claim')
@@ -248,7 +274,7 @@ def report(v:Telemetry,d=Depends(agent),s:Session=Depends(db)):
  d=s.get(Device,d.id); d.last_seen=now()
  if v.kind=='inventory':
   d.inventory=json.dumps(v.payload); d.hostname=str(v.payload.get('hostname',d.hostname)); d.ip=str(v.payload.get('primary_ip',d.ip)); d.serial=str(v.payload.get('bios_serial',d.serial))
-  if 'store_code' in v.payload: d.store_code=str(v.payload['store_code']).strip()[:40]
+  if 'store_code' in v.payload: set_store_code(s,d,v.payload['store_code'])
  elif v.kind!='heartbeat':
   m=json.loads(d.metrics); previous=dict(m)
   # Only CPU/RAM samples create history. Storage is an upsert of latest state.
@@ -262,7 +288,7 @@ def report(v:Telemetry,d=Depends(agent),s:Session=Depends(db)):
    evaluate(s,d,m,previous)
  cleanup_due=now()-_last_telemetry_cleanup>=3600
  if cleanup_due: s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete()
- s.commit()
+ commit_store(s,d.store_code)
  if cleanup_due: _last_telemetry_cleanup=now()
  return {'ok':True}
 def evaluate(s,d,m,previous=None):

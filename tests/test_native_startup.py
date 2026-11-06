@@ -10,9 +10,17 @@ def test_native_install_real_shortcut_migrates_identity_and_keeps_config(tmp_pat
  exe=root/'SIMONAgent'/'SIMONAgent.exe';exe.write_bytes(b'fixture')
  (root/'ca.crt').write_text('public ca')
  legacy=tmp_path/'local';state=legacy/'SIMON'/'data';state.mkdir(parents=True)
- (state/'identity.json').write_text('{"uuid":"same-PC-A31"}')
+ (state/'identity.json').write_text('{"uuid":"same-PC-A31","claim":"test-claim"}')
  monkeypatch.setenv('LOCALAPPDATA',str(legacy))
  monkeypatch.setattr('agent.user_startup.conflicting_agent',lambda server:None)
+ from types import SimpleNamespace
+ class Client:
+  def __init__(self,**kwargs):pass
+  def __enter__(self):return self
+  def __exit__(self,*args):pass
+  def post(self,*args,**kwargs):return SimpleNamespace(status_code=200,is_success=True)
+ monkeypatch.setattr('httpx.Client',Client)
+ monkeypatch.setattr('agent.config.tls_context',lambda *a:True)
  startup=tmp_path/'fake-startup';startup.mkdir()
  install(root,'A31',startup=startup,launch=False)
  link=win32com.client.Dispatch('WScript.Shell').CreateShortCut(str(startup/'SIMON Agent.lnk'))

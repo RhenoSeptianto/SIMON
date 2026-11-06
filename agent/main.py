@@ -95,6 +95,10 @@ def run():
      logging.info('device_credential_expired reenrollment_scheduled')
      backoff=5
     else:
+     if error.response.status_code==409:
+      try: logging.error('store_code_conflict: %s',error.response.json().get('detail','Kode store sudah digunakan.'))
+      except ValueError: logging.error('store_code_conflict: kode store sudah digunakan.')
+      backoff=150
      logging.warning('transport_failed HTTPStatusError status=%s',error.response.status_code);backoff=min(backoff*2,300)
    except Exception as e:
     logging.warning('transport_failed %s: %s',type(e).__name__,str(e)); backoff=min(backoff*2,300)

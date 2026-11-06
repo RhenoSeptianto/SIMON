@@ -28,10 +28,10 @@ try:
   page.locator('[name=username]').fill('qaadmin');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
   # Newly enrolled PCs appear without navigation/reload, even while schedule keeps focus.
   with DB() as s:
-   for index in range(9):s.add(Device(uuid=str(uuid.uuid4()),hostname='AUTO-OLD-'+str(index),store_code='AUTO',ip='10.9.0.'+str(index),serial='AUTO-'+str(index),claim='unused',status='approved',last_seen=time.time()))
+   for index in range(9):s.add(Device(uuid=str(uuid.uuid4()),hostname='AUTO-OLD-'+str(index),store_code='AUTO-'+str(index),ip='10.9.0.'+str(index),serial='AUTO-'+str(index),claim='unused',status='approved',last_seen=time.time()))
    s.commit()
   summary=page.locator('.monitoring-schedule summary');summary.click();summary.focus()
-  response=httpx.post('http://127.0.0.1:8769/api/agent/enroll',json={'uuid':str(uuid.uuid4()),'claim':'new-agent-claim-'+'x'*40,'inventory':{'hostname':'AUTO-NEW-PC','store_code':'AUTO','primary_ip':'10.9.1.1'}})
+  response=httpx.post('http://127.0.0.1:8769/api/agent/enroll',json={'uuid':str(uuid.uuid4()),'claim':'new-agent-claim-'+'x'*40,'inventory':{'hostname':'AUTO-NEW-PC','store_code':'AUTO-NEW','primary_ip':'10.9.1.1'}})
   response.raise_for_status()
   expect(page.locator('#overviewDevices').get_by_text('AUTO-NEW-PC',exact=True)).to_be_visible(timeout=15000)
   expect(page.locator('#overviewCount')).to_have_text('11 perangkat')
@@ -39,7 +39,7 @@ try:
   expect(page.locator('.monitoring-schedule')).to_have_attribute('open','')
   page.get_by_role('button',name='Devices',exact=True).click()
   search=page.get_by_label('Cari hostname atau IP');search.fill('AUTO-LIVE');search.focus()
-  response=httpx.post('http://127.0.0.1:8769/api/agent/enroll',json={'uuid':str(uuid.uuid4()),'claim':'new-agent-claim-'+'z'*40,'inventory':{'hostname':'AUTO-LIVE-PC','store_code':'AUTO','primary_ip':'10.9.1.2'}})
+  response=httpx.post('http://127.0.0.1:8769/api/agent/enroll',json={'uuid':str(uuid.uuid4()),'claim':'new-agent-claim-'+'z'*40,'inventory':{'hostname':'AUTO-LIVE-PC','store_code':'AUTO-LIVE','primary_ip':'10.9.1.2'}})
   response.raise_for_status()
   expect(page.get_by_text('AUTO-LIVE-PC',exact=True)).to_be_visible(timeout=15000)
   expect(search).to_have_value('AUTO-LIVE');expect(search).to_be_focused()

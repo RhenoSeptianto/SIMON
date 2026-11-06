@@ -39,6 +39,20 @@ def main():
    assert len(payload['disks'])==1 and payload['disks'][0]['source']=='sentinel'
    assert db.execute('select store_code from devices').fetchone()[0]=='00115'
    assert db.execute('select count(*) from telemetry').fetchone()[0]==1
+  # A different PC/identity must not reserve the same store code or create Startup.
+  rejected=sandbox/'duplicate-code';shutil.copytree(installed,rejected/'SIMONAgent',ignore=shutil.ignore_patterns('data','config.json','*.log','*.pid'))
+  shutil.copy2(tls/'ca.crt',rejected/'ca.crt')
+  rejected_config=rejected/'config.json'
+  rejected_config.write_text(json.dumps({'server':url,'store_code':'PREVIOUS','state':str(rejected/'SIMONAgent'/'data')}))
+  before_config=rejected_config.read_bytes()
+  rejected_startup=rejected/'fake-startup';rejected_startup.mkdir()
+  rejection=subprocess.run([str(rejected/'SIMONAgent'/'SIMONAgent.exe'),'--install-user','--store-code','00115','--startup-folder',str(rejected_startup)],capture_output=True,text=True,timeout=30)
+  assert rejection.returncode==1,rejection.stdout+rejection.stderr
+  assert 'sudah digunakan oleh PC' in rejection.stdout+rejection.stderr
+  assert not list(rejected_startup.glob('*.lnk'))
+  assert rejected_config.read_bytes()==before_config
+  with sqlite3.connect(sandbox/'db'/'siams.db') as db:assert db.execute('select count(*) from devices').fetchone()[0]==1
+  print('PASS: frozen installer rejects duplicate store code with PC name; no Startup/new device or config overwrite.')
   # Exercise delete/re-enroll while the SAME executable process keeps running.
   import hashlib,secrets
   salt=secrets.token_hex(16);hashed=salt+':'+hashlib.scrypt(b'smoke-pass',salt=salt.encode(),n=16384,r=8,p=1).hex()

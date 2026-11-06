@@ -115,6 +115,18 @@ def install(root,store_code=None,startup=None,launch=True):
     if process.info['exe'] and Path(process.info['exe']).resolve()==exe:raise ValueError('Tutup agent lama terlebih dahulu sebelum migrasi identitas.')
    shutil.copytree(old,state,dirs_exist_ok=True);record('Identitas lama disalin ke D; sumber tidak dihapus.')
   state.mkdir(parents=True,exist_ok=True)
+  # Reserve/check the code using this PC's existing UUID/claim, before creating Startup.
+  import uuid,secrets,socket,httpx
+  from agent.config import validate_server,tls_context
+  identity_path=state/'identity.json'
+  if not identity_path.exists():
+   temporary=identity_path.with_suffix('.json.tmp');temporary.write_text(json.dumps({'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)}),encoding='utf-8');temporary.replace(identity_path)
+  identity=json.loads(identity_path.read_text(encoding='utf-8-sig'))
+  with httpx.Client(base_url=validate_server(settings.get('server','https://172.18.123.92:8443')),verify=tls_context(str(root/'ca.crt')),timeout=15) as client:
+   response=client.post('/api/agent/enroll',json={'uuid':identity['uuid'],'claim':identity['claim'],'inventory':{'hostname':socket.gethostname(),'store_code':store_code}})
+   if response.status_code==409:raise ValueError(response.json().get('detail','Kode store sudah digunakan.'))
+   if not response.is_success:raise ValueError('Pemeriksaan kode store gagal: HTTP '+str(response.status_code)+'. Konfigurasi dan Startup belum diperbarui.')
+  record('Kode store diterima server untuk identitas PC ini.')
   settings.update(server=settings.get('server','https://172.18.123.92:8443'),ca_file='ca.crt',state=str(state),store_code=store_code,sentinel_xml=str(exe.parent/'HDSentinel.xml'))
   temporary=config.with_suffix('.json.tmp');temporary.write_text(json.dumps(settings,indent=2),encoding='utf-8');temporary.replace(config)
   link=create_shortcut(exe,config,startup or startup_folder())

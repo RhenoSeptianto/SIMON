@@ -13,3 +13,9 @@ Log instalasi: install-user.log; kegagalan EXE sebelum masuk installer dicatat B
 Validasi lokal memakai shortcut COM sungguhan di folder tes, EXE final, HTTPS/DB sementara: worker tetap hidup setelah peluncur selesai, tanpa jendela worker, tanpa proses ganda, dan UUID tetap saat restart/reenrollment. Reboot/login serta kebijakan keamanan aktual PC store tetap perlu uji pilot.
 
 Pencegahan duplikat terbaru (manifest 7/machine_single_instance): kunci Windows Global berlaku per PC/server lintas folder data dan sesi Windows. Installer mode user menolak jika service SIMON lama masih berjalan atau agent dari konfigurasi folder lain terdeteksi aktif untuk server yang sama. Worker service memakai penanda mode service, sehingga tidak menolak dirinya sendiri. Jangan menjalankan service dan Startup bersamaan; pilih satu mode. Update ini wajib rebuild EXE, lalu buat paket baru.
+
+## Kode store unik
+
+Satu kode store nonkosong hanya untuk satu identitas PC, termasuk perangkat Offline. Spasi tepi dan perbedaan huruf besar/kecil tidak membuat kode baru; nol di depan tetap dipertahankan. Instal ulang dengan UUID/claim sama boleh memakai kode lama. PC berbeda ditolak HTTP 409 dengan nama PC pemilik; tidak menimpa akun/assignment/histori. Hentikan agent lama sebelum melepas/menghapus record untuk penggantian PC. Jangan menghapus identitas lokal saat update.
+
+Update backend lalu restart server untuk mengaktifkan validasi dan migrasi kolom/index database tanpa menghapus data. Agent lama tetap dapat mengirim data untuk kode yang sah. Agar install.bat memeriksa kode sebelum membuat Startup dan menampilkan pesan jelas, build EXE baru (manifest 8/unique_store_code), lalu make-agent-package.bat dan sebar paket baru. Pemeriksaan installer memerlukan koneksi HTTPS/CA yang valid; jika konflik atau pemeriksaan gagal, konfigurasi/Startup belum diperbarui. Duplikat legacy yang sudah ada tidak dihapus otomatis dan tetap perlu ditinjau admin.
