@@ -1,3 +1,3 @@
 @echo off
-"%ProgramFiles%\SIMON\Agent\SIMONAgent.exe" --config "%ProgramData%\SIMON\config.json" --diagnose
+"%~dp0SIMONAgent\SIMONAgent.exe" --config "%~dp0SIMONAgent\config.json" --diagnose
 pause

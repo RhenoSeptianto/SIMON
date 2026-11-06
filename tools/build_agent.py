@@ -8,7 +8,7 @@ release=ROOT/'release'/'SIMONAgent';release.mkdir(parents=True,exist_ok=True)
 shutil.copytree(ROOT/'dist'/'SIMONAgent',release/'SIMONAgent',dirs_exist_ok=True)
 for source in (ROOT/'deployment'/'agent').iterdir():
  if source.is_file():shutil.copy2(source,release/source.name)
-(release/'agent-build.json').write_text(json.dumps({'format':4,'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics'],'exe_sha256':hashlib.sha256((release/'SIMONAgent'/'SIMONAgent.exe').read_bytes()).hexdigest()}),encoding='utf-8')
+(release/'agent-build.json').write_text(json.dumps({'format':5,'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install'],'exe_sha256':hashlib.sha256((release/'SIMONAgent'/'SIMONAgent.exe').read_bytes()).hexdigest()}),encoding='utf-8')
 exe=release/'SIMONAgent'/'SIMONAgent.exe'
 (release/'SHA256.txt').write_text(hashlib.sha256(exe.read_bytes()).hexdigest()+'  SIMONAgent/SIMONAgent.exe\n')
 archive=shutil.make_archive(str(ROOT/'release'/'SIMONAgent-template'),'zip',release)

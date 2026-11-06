@@ -1,4 +1,4 @@
-﻿import json,ssl,zipfile,uuid,hashlib
+import json,ssl,zipfile,uuid,hashlib
 from pathlib import Path
 import pytest
 from agent.config import load_config,validate_server,tls_context
@@ -34,7 +34,7 @@ def test_agent_package_contains_public_ca_only(tmp_path):
  release=tmp_path/'release';release.mkdir()
  with zipfile.ZipFile(release/'SIMONAgent-template.zip','w') as z:
   z.writestr('SIMONAgent/SIMONAgent.exe',b'test executable fixture')
-  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics'],'exe_sha256':hashlib.sha256(b'test executable fixture').hexdigest()}))
+  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install'],'exe_sha256':hashlib.sha256(b'test executable fixture').hexdigest()}))
   z.writestr('install.bat','test fixture')
  result=make_package(tmp_path)
  with zipfile.ZipFile(result) as z:
@@ -66,10 +66,28 @@ def test_store_package_refreshes_installer_without_rebuilding_exe(tmp_path):
  release=tmp_path/'release';release.mkdir()
  with zipfile.ZipFile(release/'SIMONAgent-template.zip','w') as z:
   z.writestr('SIMONAgent/SIMONAgent.exe',b'unchanged-binary')
-  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics'],'exe_sha256':hashlib.sha256(b'unchanged-binary').hexdigest()}))
+  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install'],'exe_sha256':hashlib.sha256(b'unchanged-binary').hexdigest()}))
   z.writestr('install.ps1','old installer')
  installers=tmp_path/'deployment'/'agent';installers.mkdir(parents=True)
  (installers/'install.ps1').write_text('fixed installer')
  with zipfile.ZipFile(make_package(tmp_path)) as z:
   assert z.read('install.ps1')==b'fixed installer'
   assert z.read('SIMONAgent/SIMONAgent.exe')==b'unchanged-binary'
+
+
+def test_frozen_agent_prefers_config_next_to_exe(tmp_path,monkeypatch):
+ import agent.config as configuration
+ local=tmp_path/'SIMONAgent';local.mkdir()
+ exe=local/'SIMONAgent.exe';exe.write_bytes(b'fixture')
+ legacy=tmp_path/'legacy.json';legacy.write_text('{"store_code":"legacy"}')
+ monkeypatch.setattr(configuration,'DEFAULT_CONFIG',legacy)
+ monkeypatch.setattr(configuration.sys,'executable',str(exe))
+ monkeypatch.setattr(configuration.sys,'frozen',True,raising=False)
+ assert configuration.load_config()['store_code']=='legacy'
+ (local/'config.json').write_text(json.dumps({'store_code':'00115','state':'data','sentinel_xml':'HDSentinel.xml'}))
+ result=configuration.load_config()
+ assert result['store_code']=='00115'
+ assert Path(result['state'])==local/'data'
+ assert Path(result['sentinel_xml'])==local/'HDSentinel.xml'
+ # Explicit config always wins, including test and support invocations.
+ assert configuration.load_config(legacy)['store_code']=='legacy'

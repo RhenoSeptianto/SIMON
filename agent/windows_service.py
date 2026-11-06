@@ -1,6 +1,7 @@
-﻿"""Installed under Program Files; worker only collects locally and sends outbound HTTPS."""
+"""Run from its permanent package folder; worker only collects locally and sends outbound HTTPS."""
 import os, sys, subprocess
 from pathlib import Path
+from agent.config import service_config,load_config
 import servicemanager,win32event,win32service,win32serviceutil
 
 class SIMONService(win32serviceutil.ServiceFramework):
@@ -16,8 +17,16 @@ class SIMONService(win32serviceutil.ServiceFramework):
         win32event.SetEvent(self.stop_event)
     def SvcDoRun(self):
         executable=Path(sys.executable)
-        config=Path(os.environ['PROGRAMDATA'])/'SIMON'/'config.json'
-        self.worker=subprocess.Popen([str(executable),'--config',str(config)],cwd=executable.parent,creationflags=0x08000000)
+        config=service_config(executable)
+        settings=load_config(config)
+        log_dir=Path(settings['state']);log_dir.mkdir(parents=True,exist_ok=True)
+        output=log_dir/'service-worker.log'
+        if output.exists() and output.stat().st_size>1048576:
+            output.replace(log_dir/'service-worker.previous.log')
+        # Capture startup/config/import errors that occur before agent.log exists.
+        with output.open('ab',buffering=0) as stream:
+            self.worker=subprocess.Popen([str(executable),'--config',str(config)],cwd=executable.parent,env={**os.environ,'SIAMS_WORKER_CAPTURE':'1'},stdout=stream,stderr=subprocess.STDOUT,creationflags=0x08000000)
+
         servicemanager.LogInfoMsg('SIMONAgent started')
         while win32event.WaitForSingleObject(self.stop_event,1000)==win32event.WAIT_TIMEOUT:
             if self.worker.poll() is not None:

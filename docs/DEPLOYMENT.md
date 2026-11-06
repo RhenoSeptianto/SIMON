@@ -37,7 +37,7 @@ Pada **PC kantor**, jalankan deployment/server/make-agent-package.bat. Script me
 
 ## 4. Pasang di store (satu kali)
 
-Ekstrak SIMONAgent-store.zip. Klik kanan install.bat -> Run as administrator. Service SIMONAgent langsung mulai, lalu otomatis menyala saat Windows boot tanpa login. Installer menyimpan binary di Program Files/SIMON/Agent, konfigurasi di ProgramData/SIMON, identitas/queue/log di ProgramData/SIAMS. Nama folder SIAMS dipertahankan supaya identitas agent lama tidak berubah.
+Ekstrak SIMONAgent-store.zip. Klik kanan install.bat -> Run as administrator. Service SIMONAgent langsung mulai, lalu otomatis menyala saat Windows boot tanpa login. Ekstrak ke lokasi permanen (contoh D:/SIMONAgent-store). Binary, konfigurasi, XML dan folder data tetap di subfolder SIMONAgent dalam paket. Installer memigrasikan identitas lama dari ProgramData/SIAMS bila state lokal belum ada. Folder tidak boleh dipindahkan setelah service didaftarkan.
 
 Buka status.bat. Perangkat muncul otomatis di SIMON, Super Admin memilih TS langsung pada detail PC. Installer dapat dijalankan kembali untuk update binary/config sambil mempertahankan UUID dan antrean. Uninstaller hanya menghapus service; state/binary tetap tersedia untuk reinstall.
 
@@ -79,7 +79,7 @@ Setelah git pull pada PC kantor, jalankan make-agent-package.bat sebagai Adminis
 1. Update server lebih dahulu: git pull, lalu setup-server.bat. Kolom store_code ditambahkan pada database lama secara idempotent, tanpa menghapus device, akun, atau assignment.
 2. Build template EXE baru melalui tools/build-agent.bat atau artifact GitHub Actions terbaru. Binary lama belum mendukung Sentinel/kode store; make-agent-package.bat menolak template tanpa capability manifest dan checksum yang sesuai.
 3. Buat ulang paket store dan jalankan install.bat sebagai Administrator. Isi kode store (contoh 00115). Update berikutnya dapat memakai Enter untuk mempertahankan kode lama.
-4. Atur Sentinel mengekspor XML setiap 10 detik ke C:\Program Files\SIMON\HDSentinel.xml. Pastikan Sentinel juga berjalan otomatis serta memiliki izin menulis di folder tersebut. Agent tidak menginstal/mengonfigurasi Sentinel atau mengubah frekuensi scan Sentinel. Jika Sentinel belum berjalan setelah boot, status missing/stale muncul dan agent terus memantau sampai XML tersedia.
+4. Atur Sentinel mengekspor XML setiap 10 detik ke D:\SIMONAgent-store\SIMONAgent\HDSentinel.xml (sesuaikan lokasi paket). Pastikan Sentinel juga berjalan otomatis serta memiliki izin menulis di folder tersebut. Agent tidak menginstal/mengonfigurasi Sentinel atau mengubah frekuensi scan Sentinel. Jika Sentinel belum berjalan setelah boot, status missing/stale muncul dan agent terus memantau sampai XML tersedia.
 
 Agent memantau metadata file sekitar satu detik, membaca perubahan lengkap dan mengirim snapshot disk. Tidak ada lagi jadwal 16.00/pemeriksaan storage lewat PowerShell. CPU/RAM/drive tetap sekitar 10 detik, heartbeat sekitar 10 detik. Dashboard detail mengambil nilai disk terbaru setiap 10 detik tanpa mereset tab atau dropdown assignment.
 
@@ -104,6 +104,10 @@ Menu Laporan mengekspor XLSX saja dengan tiga sheet Perangkat, SSD-HDD, Kapasita
 
 ## Interval angka terbaru 10 detik
 
-Default interval CPU/RAM/drive dan heartbeat pada agent terbaru adalah 10 detik. Perlu EXE baru (manifest format 4, capability ten_second_metrics). Update backend dengan setup-server.bat, build template baru, buat paket store lalu install ulang. Metadata interval disertakan dalam inventory agar server memakai toleransi offline sekitar 45 detik untuk agent baru; agent lama tetap memakai toleransi lamanya sampai diupdate. Override OFFLINE_SECONDS tetap didukung.
+Default interval CPU/RAM/drive dan heartbeat pada agent terbaru adalah 10 detik. Perlu EXE baru (manifest format 5, capability ten_second_metrics dan in_place_install). Update backend dengan setup-server.bat, build template baru, buat paket store lalu install ulang. Metadata interval disertakan dalam inventory agar server memakai toleransi offline sekitar 45 detik untuk agent baru; agent lama tetap memakai toleransi lamanya sampai diupdate. Override OFFLINE_SECONDS tetap didukung.
 
 Histori CPU/RAM dipadatkan per 5 menit (HISTORY_INTERVAL_SECONDS default 300) agar database tetap ringan; kondisi terbaru untuk dashboard/laporan tetap setiap 10 detik. Detail PC memperbarui CPU/RAM, sisa drive, koneksi, dan Sentinel otomatis tanpa menutup dialog atau mereset assignment.
+
+### Log instalasi dan pemeriksaan agent
+
+install.log mencatat tahap instalasi dan error; check-agent.bat/status.bat menghasilkan check-agent.log dengan pemeriksaan file, service/path/exit code, akses tulis, EXE/HTTPS terverifikasi CA, log agent dan startup worker, serta event Windows terkait. Tidak mengubah kebijakan antivirus. Sangfor mungkin menyimpan blokir hanya di konsol pengelola. Bila PowerShell tidak boleh dijalankan, launcher BAT mencatat kode keluar sebisa mungkin.

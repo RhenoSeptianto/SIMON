@@ -1,5 +1,5 @@
 """Run built executable against a temporary HTTPS server, not the operational DB."""
-import os,sys,tempfile,subprocess,socket,time,json,sqlite3
+import os,sys,tempfile,subprocess,socket,time,json,sqlite3,shutil
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from tools.server_setup import generate_tls
@@ -10,6 +10,7 @@ def main():
  exe=ROOT/'release'/'SIMONAgent'/'SIMONAgent'/'SIMONAgent.exe'
  if not exe.exists():raise SystemExit('Build executable first: python -m tools.build_agent')
  sandbox=Path(tempfile.mkdtemp(prefix='simon-frozen-'));tls=sandbox/'tls';generate_tls(tls)
+ installed=sandbox/'SIMONAgent';shutil.copytree(exe.parent,installed);exe=installed/'SIMONAgent.exe'
  sock=socket.socket();sock.bind(('127.0.0.1',0));port=sock.getsockname()[1];sock.close()
  url=f'https://127.0.0.1:{port}';env=os.environ.copy();env['SIAMS_DATA']=str(sandbox/'db');env['SIAMS_PRODUCTION']='1'
  server=subprocess.Popen([sys.executable,'-m','uvicorn','backend.main:app','--host','127.0.0.1','--port',str(port),'--ssl-keyfile',str(tls/'server.key'),'--ssl-certfile',str(tls/'server.crt'),'--no-access-log'],cwd=ROOT,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=0x08000000)
@@ -21,10 +22,14 @@ def main():
    time.sleep(.1)
   else:raise RuntimeError('HTTPS test server not ready')
   subprocess.run([sys.executable,'-m','tools.server_healthcheck','--ca',str(tls/'ca.crt'),'--url',url],cwd=ROOT,check=True,timeout=15)
-  xml=sandbox/'HDSentinel.xml'
+  xml=installed/'HDSentinel.xml'
   xml.write_text('<Hard_Disk_Sentinel><Physical_Disk_Information_Disk_0><Hard_Disk_Summary><Hard_Disk_Model_ID>Smoke SSD</Hard_Disk_Model_ID><Hard_Disk_Serial_Number>SMOKE-SSD-1</Hard_Disk_Serial_Number><Health>95 %</Health><Performance>100 %</Performance><Current_Temperature>37 C</Current_Temperature></Hard_Disk_Summary></Physical_Disk_Information_Disk_0></Hard_Disk_Sentinel>')
-  config=sandbox/'agent-config.json';config.write_text(json.dumps({'server':url,'ca_file':str(tls/'ca.crt'),'state':str(sandbox/'state'),'sentinel_xml':str(xml),'store_code':'00115'}))
-  command=[str(exe),'--config',str(config),'--once']
+  shutil.copy2(tls/'ca.crt',installed/'ca.crt')
+  config=installed/'config.json';config.write_text(json.dumps({'server':url,'ca_file':'ca.crt','state':'data','sentinel_xml':'HDSentinel.xml','store_code':'00115'}))
+  probe=subprocess.run([str(exe),'--check-connection'],check=True,timeout=20,capture_output=True,text=True)
+  assert 'HTTPS OK: HTTP 200' in probe.stdout
+  assert not (installed/'data'/'identity.json').exists()
+  command=[str(exe),'--once']
   for _ in range(2):subprocess.run(command,check=True,timeout=120,capture_output=True,text=True)
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:
    assert db.execute('select count(*) from devices').fetchone()[0]==1

@@ -1,4 +1,4 @@
-﻿"""Configuration for source and standalone agent. Never disables certificate validation."""
+"""Configuration for source and standalone agent. Never disables certificate validation."""
 import json, os, ssl, sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -6,8 +6,12 @@ from urllib.parse import urlsplit
 DEFAULT_SERVER='https://172.18.123.92:8443'
 DEFAULT_CONFIG=Path(os.getenv('PROGRAMDATA',str(Path.home())))/'SIMON'/'config.json'
 
+def service_config(executable=None):
+    local=Path(executable or sys.executable).resolve().parent/'config.json'
+    return local if local.exists() else DEFAULT_CONFIG
+
 def load_config(path=None):
-    target=Path(path) if path else DEFAULT_CONFIG
+    target=Path(path) if path else (service_config() if getattr(sys,'frozen',False) else DEFAULT_CONFIG)
     if not target.exists():
         if path: raise ValueError(f'Config tidak ditemukan: {target}')
         return {}

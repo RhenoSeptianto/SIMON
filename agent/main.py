@@ -13,7 +13,7 @@ def save_identity(path,data):
  os.replace(temporary,path)
 
 def run():
- p=argparse.ArgumentParser(); p.add_argument('--server'); p.add_argument('--config'); p.add_argument('--ca-file'); p.add_argument('--once',action='store_true'); p.add_argument('--diagnose',action='store_true'); p.add_argument('--state'); p.add_argument('--store-code'); p.add_argument('--sentinel-xml'); args=p.parse_args()
+ p=argparse.ArgumentParser(); p.add_argument('--server'); p.add_argument('--config'); p.add_argument('--ca-file'); p.add_argument('--once',action='store_true'); p.add_argument('--diagnose',action='store_true'); p.add_argument('--check-connection',action='store_true'); p.add_argument('--state'); p.add_argument('--store-code'); p.add_argument('--sentinel-xml'); args=p.parse_args()
  try:
   config=load_config(args.config)
   args.server=validate_server(args.server or config.get('server') or os.getenv('SIAMS_SERVER') or (DEFAULT_SERVER if getattr(sys,'frozen',False) else 'http://127.0.0.1:8000'))
@@ -26,8 +26,15 @@ def run():
   ca_file=args.ca_file or config.get('ca_file')
   verify=tls_context(ca_file) if ca_file and not args.diagnose else None
  except (ValueError,OSError) as error: p.error(str(error))
+ if args.check_connection:
+  try:
+   with httpx.Client(verify=verify if verify is not None else True,timeout=10) as probe:
+    response=probe.get(args.server+'/');response.raise_for_status()
+   print('HTTPS OK: HTTP '+str(response.status_code));return
+  except Exception as error:
+   print('HTTPS GAGAL: '+str(error));raise SystemExit(1)
  state=Path(args.state); state.mkdir(parents=True,exist_ok=True)
- logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s',handlers=[RotatingFileHandler(state/'agent.log',maxBytes=1048576,backupCount=3,encoding='utf8'),logging.StreamHandler()])
+ logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s',handlers=[RotatingFileHandler(state/'agent.log',maxBytes=1048576,backupCount=3,encoding='utf8')]+([] if os.getenv('SIAMS_WORKER_CAPTURE')=='1' else [logging.StreamHandler()]))
  identity=state/'identity.json'
  if not identity.exists(): save_identity(identity,{'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)})
  ident=json.loads(identity.read_text()); queue=sqlite3.connect(state/'queue.db'); queue.execute('create table if not exists queue(id integer primary key,payload text)'); queue.execute('pragma journal_size_limit=1048576')
@@ -83,7 +90,7 @@ def run():
     else:
      logging.warning('transport_failed HTTPStatusError status=%s',error.response.status_code);backoff=min(backoff*2,300)
    except Exception as e:
-    logging.warning('transport_failed %s',type(e).__name__); backoff=min(backoff*2,300)
+    logging.warning('transport_failed %s: %s',type(e).__name__,str(e)); backoff=min(backoff*2,300)
    if args.once: break
    time.sleep(backoff+random.uniform(0,0.25))
 if __name__=='__main__': run()

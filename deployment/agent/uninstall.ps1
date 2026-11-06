@@ -7,4 +7,4 @@ if ($service) {
     if ($LASTEXITCODE -ne 0) { throw 'Gagal menghapus service' }
 }
 Write-Host 'Service dihapus. State/UUID dan binary dipertahankan agar aman untuk reinstall.'
-Write-Host 'Folder state: %PROGRAMDATA%\SIAMS. Jangan hapus jika ingin mempertahankan identitas PC.'
+Write-Host "Folder state: $PSScriptRoot\SIMONAgent\data. Jangan hapus jika ingin mempertahankan identitas PC."
