@@ -1,4 +1,4 @@
-﻿"""Run built executable against a temporary HTTPS server, not the operational DB."""
+"""Run built executable against a temporary HTTPS server, not the operational DB."""
 import os,sys,tempfile,subprocess,socket,time,json,sqlite3
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
@@ -20,6 +20,7 @@ def main():
    except httpx.HTTPError:pass
    time.sleep(.1)
   else:raise RuntimeError('HTTPS test server not ready')
+  subprocess.run([sys.executable,'-m','tools.server_healthcheck','--ca',str(tls/'ca.crt'),'--url',url],cwd=ROOT,check=True,timeout=15)
   command=[str(exe),'--server',url,'--ca-file',str(tls/'ca.crt'),'--state',str(sandbox/'state'),'--once']
   for _ in range(2):subprocess.run(command,check=True,timeout=120,capture_output=True,text=True)
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:

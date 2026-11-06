@@ -35,16 +35,22 @@ function Protect-OperationalData {
 
     $targets = @(
         Get-ChildItem -LiteralPath $DataPath -Force -Recurse -ErrorAction Stop |
-            Sort-Object { $_.FullName.Length } -Descending |
-            Select-Object -ExpandProperty FullName
+            Sort-Object { $_.FullName.Length } -Descending
     )
-    $targets += $DataPath
+    $targets += Get-Item -LiteralPath $DataPath -Force
     foreach ($target in $targets) {
-        Invoke-Checked -Exe 'icacls.exe' -Arguments @(
-            $target, '/inheritance:r', '/grant:r',
-            '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F',
-            '/remove:g', "*$SetupUserSid", '/Q'
-        ) -FailureMessage "Gagal mengamankan permission '$target' untuk SYSTEM dan Administrators."
+        # Inheritance flags are valid for directories. On a file icacls silently
+        # drops (OI)(CI) grants, leaving an empty DACL after inheritance is removed.
+        $rights = if ($target.PSIsContainer) { '(OI)(CI)F' } else { 'F' }
+        $aclArguments = @(
+            $target.FullName, '/inheritance:r', '/grant:r',
+            "*S-1-5-18:$rights", "*S-1-5-32-544:$rights"
+        )
+        if ($SetupUserSid -notin @('S-1-5-18', 'S-1-5-32-544')) {
+            $aclArguments += @('/remove:g', "*$SetupUserSid")
+        }
+        $aclArguments += '/Q'
+        Invoke-Checked -Exe 'icacls.exe' -Arguments $aclArguments -FailureMessage "Gagal mengamankan permission '$($target.FullName)' untuk SYSTEM dan Administrators."
     }
 }
 
@@ -232,6 +238,10 @@ if ($databaseBackend -eq 'sqlite' -and $databasePath -ne ':memory:' -and -not $d
 $setupUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 foreach ($permissionPath in $permissionPaths) {
     Invoke-Checked -Exe 'icacls.exe' -Arguments @($permissionPath, '/grant:r', "*${setupUserSid}:(OI)(CI)F", '/T', '/Q') -FailureMessage "Gagal memberikan akses sementara ke data '$permissionPath' untuk akun SID $setupUserSid."
+    # Repair files previously left without access by the old folder-only grants.
+    foreach ($file in @(Get-ChildItem -LiteralPath $permissionPath -File -Force -Recurse -ErrorAction Stop)) {
+        Invoke-Checked -Exe 'icacls.exe' -Arguments @($file.FullName, '/grant:r', "*${setupUserSid}:F", '/Q') -FailureMessage "Gagal memulihkan akses file '$($file.FullName)' untuk akun setup."
+    }
 }
 
 try {
@@ -312,23 +322,7 @@ if (-not (Get-NetFirewallRule -Name 'SIMONServerHTTPS' -ErrorAction SilentlyCont
 }
 
 Start-ScheduledTask -TaskName 'SIMONServer' -ErrorAction Stop
-$healthCheckCode = @'
-import ssl,sys,time,urllib.request
-context=ssl.create_default_context(cafile=sys.argv[1])
-for attempt in range(30):
-    try:
-        with urllib.request.urlopen(sys.argv[2], context=context, timeout=2) as response:
-            if response.status != 200:
-                raise RuntimeError(response.status)
-            print(response.status)
-            break
-    except Exception as exc:
-        if attempt == 29:
-            print(type(exc).__name__, exc, file=sys.stderr)
-            raise SystemExit(1)
-        time.sleep(1)
-'@
-$healthCheck = & $venvPythonPath '-c' $healthCheckCode $certificatePath 'https://127.0.0.1:8443/' 2>&1
+$healthCheck = & $venvPythonPath '-m' 'tools.server_healthcheck' '--ca' $certificatePath '--url' 'https://127.0.0.1:8443/'
 $healthCheckExitCode = $LASTEXITCODE
 if ($healthCheckExitCode -ne 0) {
     $healthDetails = ($healthCheck | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine

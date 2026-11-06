@@ -58,3 +58,11 @@ Upload source saja. .gitignore mengecualikan .venv, data, release, binaries, con
 Installer terbaru mencetak SIMON SQLite check: path database, jenis file/folder, atribut read-only, hasil membuat database uji di folder yang sama, dan hasil membuka/menulis transaksi yang dibatalkan pada database operasional. File siams.db tidak dihapus atau direset. Untuk database di dalam folder data yang dikelola SIMON, installer dapat melepas atribut read-only file; database eksternal tidak diubah atributnya otomatis. Bila gagal, ACL folder/file ditampilkan agar explicit Deny atau masalah lokasi terlihat. Keberhasilan icacls saja belum membuktikan SQLite dapat menulis.
 
 Tarik update kemudian jalankan setup-server.bat sebagai Administrator. Bila masih gagal, kirim seluruh bagian mulai SIMON SQLite check sampai GAGAL beserta output ACL. Jangan membuat database kosong pengganti atau menghapus folder data sebelum penyebabnya diketahui.
+
+### Perbaikan ACL file database/sertifikat
+
+Akar masalah SQLITE_CANTOPEN dan sertifikat yang tidak dapat dibaca berhasil direproduksi pada Windows: `icacls` mengabaikan grant `(OI)(CI)F` bila targetnya file. Skrip lama menghapus inheritance file lalu memakai grant tersebut sehingga DACL file dapat kosong, walaupun command melaporkan sukses. Skrip terbaru memakai `(OI)(CI)F` hanya pada folder, dan `F` pada file. Sebelum bootstrap, grant sementara `F` dipasang ke file yang sudah terlanjur terkunci supaya rerun dapat memulihkan akses tanpa menghapus data atau sertifikat. Sesudah setup, akses file dilindungi untuk SYSTEM dan Administrators.
+
+Health check memakai modul `tools.server_healthcheck` agar kesalahan membaca CA/koneksi dilaporkan lengkap melalui stdout. Windows PowerShell 5.1 tidak lagi memotong traceback di NativeCommandError akibat redirect stderr. Certificate validation tetap aktif dan kegagalan HTTP/TLS tetap membuat setup gagal. Peringatan import Windows Trusted Root tetap ditampilkan bila dibatasi kebijakan kantor.
+
+Tarik update, lalu jalankan ulang setup-server.bat sebagai Administrator di folder proyek yang sama. Tidak perlu pindah folder atau membuat database kosong lagi. Tes regresi memuat fungsi ACL asli melalui PowerShell AST dan memeriksa ACE file database/CA nyata dalam folder uji; tidak memasang task/firewall operasional.
