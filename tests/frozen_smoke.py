@@ -34,6 +34,38 @@ def main():
    assert len(payload['disks'])==1 and payload['disks'][0]['source']=='sentinel'
    assert db.execute('select store_code from devices').fetchone()[0]=='00115'
    assert db.execute('select count(*) from telemetry').fetchone()[0]==2
+  # Exercise delete/re-enroll while the SAME executable process keeps running.
+  import hashlib,secrets
+  salt=secrets.token_hex(16);hashed=salt+':'+hashlib.scrypt(b'smoke-pass',salt=salt.encode(),n=16384,r=8,p=1).hex()
+  with sqlite3.connect(sandbox/'db'/'siams.db') as db:
+   db.execute("insert into users(name,username,password,role,active,stores) values(?,?,?,?,?,?)",('Smoke Admin','smokeadmin',hashed,'super_admin',1,'[]'))
+  worker=subprocess.Popen(command[:-1],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=0x08000000)
+  try:
+   for _ in range(45):
+    with sqlite3.connect(sandbox/'db'/'siams.db') as db: samples=db.execute('select count(*) from telemetry').fetchone()[0]
+    if samples>=3:break
+    time.sleep(1)
+   else:raise RuntimeError('Live agent did not send startup metrics')
+   time.sleep(1)
+   with httpx.Client(base_url=url,verify=tls_context(str(tls/'ca.crt')),timeout=10) as client:
+    assert client.post('/api/login',json={'username':'smokeadmin','password':'smoke-pass'}).status_code==200
+    before=client.get('/api/devices').json()['items'][0]
+    assert client.delete('/api/devices/'+str(before['id']),headers={'X-SIAMS-Request':'1'}).status_code==200
+    xml.write_text(xml.read_text()+'\n')  # Simulate the next Sentinel export.
+    for _ in range(45):
+     records=client.get('/api/devices').json()['items']
+     if records and records[0]['metrics'].get('storage_source')=='sentinel' and records[0]['metrics'].get('cpu_usage') is not None:
+      after=records[0];break
+     time.sleep(1)
+    else:raise RuntimeError('Agent did not reenroll after delete')
+    assert worker.poll() is None
+    assert after['uuid']==before['uuid'] and after['store_code']=='00115'
+    with sqlite3.connect(sandbox/'db'/'siams.db') as db:
+     assert db.execute('select count(*) from devices').fetchone()[0]==1
+     assert db.execute('select count(*) from telemetry').fetchone()[0]==1
+    print('PASS: running EXE reenrolls automatically after dashboard delete with the same UUID/store code; only new CPU history remains.')
+  finally:
+   worker.terminate();worker.wait(timeout=15)
   print('PASS: built exe starts, validates office-style CA, enrolls, reports Windows inventory/CPU/RAM and Sentinel fixture without disk history, carries store code, and preserves one UUID across restarts.')
   print('EXE:',exe)
   print('ZIP bytes:',(ROOT/'release'/'SIMONAgent-template.zip').stat().st_size)

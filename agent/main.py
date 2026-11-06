@@ -7,6 +7,11 @@ from agent.collectors import inventory,metrics
 from agent.sentinel import SentinelWatcher,DEFAULT_XML
 from agent.config import load_config,validate_server,tls_context,DEFAULT_SERVER
 
+def save_identity(path,data):
+ temporary=path.with_name(path.name+'.'+str(os.getpid())+'.tmp')
+ temporary.write_text(json.dumps(data),encoding='utf-8')
+ os.replace(temporary,path)
+
 def run():
  p=argparse.ArgumentParser(); p.add_argument('--server'); p.add_argument('--config'); p.add_argument('--ca-file'); p.add_argument('--once',action='store_true'); p.add_argument('--diagnose',action='store_true'); p.add_argument('--state'); p.add_argument('--store-code'); p.add_argument('--sentinel-xml'); args=p.parse_args()
  try:
@@ -22,7 +27,7 @@ def run():
  state=Path(args.state); state.mkdir(parents=True,exist_ok=True)
  logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s',handlers=[RotatingFileHandler(state/'agent.log',maxBytes=1048576,backupCount=3,encoding='utf8'),logging.StreamHandler()])
  identity=state/'identity.json'
- if not identity.exists(): identity.write_text(json.dumps({'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)}))
+ if not identity.exists(): save_identity(identity,{'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)})
  ident=json.loads(identity.read_text()); queue=sqlite3.connect(state/'queue.db'); queue.execute('create table if not exists queue(id integer primary key,payload text)'); queue.execute('pragma journal_size_limit=1048576')
  if 'kind' not in [row[1] for row in queue.execute('pragma table_info(queue)')]: queue.execute("alter table queue add column kind text not null default ''")
  queue.commit()
@@ -59,13 +64,22 @@ def run():
     if not ident.get('credential'):
      client.post('/api/agent/enroll',json={**{k:ident[k] for k in ('uuid','claim')},'inventory':collect_inventory()}).raise_for_status()
      r=client.post('/api/agent/claim',json={k:ident[k] for k in ('uuid','claim')}); r.raise_for_status(); result=r.json()
-     if result.get('credential'): ident['credential']=result['credential']; identity.write_text(json.dumps(ident))
+     if result.get('credential'): ident['credential']=result['credential']; save_identity(identity,ident)
      elif result.get('status')=='credential_issued' and previous_credential: ident['credential']=previous_credential
      else: logging.info('enrollment_status=%s',result['status']); backoff=300
     if ident.get('credential'):
      for id,payload in queue.execute('select id,payload from queue order by id limit 50').fetchall():
       r=client.post('/api/agent/report',json=json.loads(payload),headers={'Authorization':'Bearer '+ident['credential']}); r.raise_for_status(); queue.execute('delete from queue where id=?',(id,)); queue.commit()
     backoff=5
+   except httpx.HTTPStatusError as error:
+    if error.response.status_code==401 and ident.get('credential'):
+     # Preserve UUID/claim/store configuration, discard only the invalid token.
+     ident.pop('credential',None);previous_credential=None;save_identity(identity,ident)
+     due['metrics']=0;due['inventory']=0;sentinel.reset()
+     logging.info('device_credential_expired reenrollment_scheduled')
+     backoff=5
+    else:
+     logging.warning('transport_failed HTTPStatusError status=%s',error.response.status_code);backoff=min(backoff*2,300)
    except Exception as e:
     logging.warning('transport_failed %s',type(e).__name__); backoff=min(backoff*2,300)
    if args.once: break

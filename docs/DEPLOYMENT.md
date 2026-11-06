@@ -86,3 +86,10 @@ Agent memantau metadata file sekitar 5?8 detik, membaca perubahan lengkap dan me
 Disk diidentifikasi berdasarkan serial (fallback model+lokasi hanya jika tersedia). Health/performance tidak ditafsirkan sebagai wear. Ringkasan hanya mengambil field disk/report yang diperlukan; informasi registrasi Sentinel tidak dikirim. XML missing/partial/stale lebih dari 2 menit ditandai, data valid terakhir dipertahankan. Ekspor XML tiap 10 detik bukan jaminan hardware Sentinel benar-benar melakukan scan tiap 10 detik; waktu/status pemantauan dari laporan tetap ditampilkan.
 
 Tidak menyimpan histori snapshot disk. Antrean storage offline digabung menjadi snapshot terakhir. Histori CPU/RAM tetap, serta riwayat alert deduplicated untuk suhu >65 C, health di bawah batas (default 80%), health turun, dan perubahan identitas disk. Perubahan sementara selama offline mungkin tidak masuk riwayat karena snapshot offline digabung. Kode store hanya metadata tampilan/filter/ekspor; akses TS tetap berdasarkan assignment PC langsung.
+
+
+## Hapus perangkat dan otomatis kembali
+
+Versi terbaru menyederhanakan pengelolaan perangkat menjadi Hapus saja; tombol/API Revoke tidak digunakan. Penghapusan menghapus histori/alert/assignment, tetapi agent yang masih berjalan dapat mendaftar kembali memakai UUID/kode store yang sama pada pengiriman berikutnya. Credential lama tidak berlaku setelah delete; EXE baru menangani 401 dengan enrollment ulang, mempertahankan identity dan queue serta memaksa pembaruan metrics/Sentinel. Assignment TS yang dihapus tidak dikembalikan otomatis. Untuk PC yang tidak ingin muncul kembali, hentikan/uninstall service secara lokal.
+
+Update server lalu gunakan template EXE terbaru (manifest format 3, capability reenrollment_after_delete), buat ulang paket dan install ulang di store. Installer mempertahankan UUID/config/kode store. Paket menolak executable lama yang belum mendukung pemulihan credential. Perubahan UI suhu: simbol derajat ditulis dengan entity HTML untuk menghindari '?C' akibat encoding; sensor kosong tetap N/A.

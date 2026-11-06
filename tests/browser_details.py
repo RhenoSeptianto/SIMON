@@ -65,7 +65,7 @@ try:
   dialog=page.locator('dialog');expect(dialog).to_be_visible();expect(dialog.get_by_text('24%',exact=True)).to_be_visible()
   expect(dialog.locator('.monitoring-schedule')).to_have_count(0)
   expect(page.locator('#panel-overview').get_by_text('Tersisa 80%',exact=True)).to_be_visible()
-  page.get_by_role('tab',name='Storage',exact=True).click();expect(dialog.get_by_text('QA SSD',exact=True)).to_be_visible();expect(dialog.get_by_text('Health 95%',exact=True)).to_be_visible();expect(dialog.get_by_text('100%',exact=True)).to_be_visible();expect(dialog.get_by_text('Store 00115',exact=True)).to_be_visible()
+  page.get_by_role('tab',name='Storage',exact=True).click();expect(dialog.get_by_text('QA SSD',exact=True)).to_be_visible();expect(dialog.get_by_text('Health 95%',exact=True)).to_be_visible();expect(dialog.get_by_text('100%',exact=True)).to_be_visible();expect(dialog.get_by_text('Store 00115',exact=True)).to_be_visible();expect(dialog.get_by_text('44 \u00b0C',exact=True)).to_be_visible()
   with DB() as s:
    live=s.get(Device,did);values=json.loads(live.metrics);values['disks'][0]['health_percent']=94;live.metrics=json.dumps(values);s.commit()
   expect(dialog.get_by_text('Health 94%',exact=True)).to_be_visible(timeout=15000)
@@ -74,7 +74,7 @@ try:
   page.locator('#historySlider').focus();page.keyboard.press('Home');expect(page.locator('#historyTooltip')).to_contain_text('CPU 20%')
   page.get_by_label('Periode histori').select_option('1');expect(page.get_by_text('Belum ada sampel pada periode ini')).to_be_visible()
   page.get_by_label('Periode histori').select_option('168');expect(page.locator('#historySVG')).to_be_visible()
-  page.get_by_role('tab',name='Akses User',exact=True).click();page.get_by_label('Pilih user TS').select_option(label='QA TS (qats)');page.get_by_role('button',name='Assign',exact=True).click();expect(page.get_by_text('User berhasil diassign.')).to_be_visible()
+  page.get_by_role('tab',name='Akses User',exact=True).click();expect(page.get_by_role('button',name='Revoke credential',exact=True)).to_have_count(0);page.get_by_label('Pilih user TS').select_option(label='QA TS (qats)');page.get_by_role('button',name='Assign',exact=True).click();expect(page.get_by_text('User berhasil diassign.')).to_be_visible()
   page.get_by_role('tab',name='Ringkasan',exact=True).click();page.get_by_role('button',name='Refresh data',exact=True).click();expect(page.get_by_role('tab',name='Ringkasan')).to_have_attribute('aria-selected','true')
   page.evaluate("document.body.classList.add('dark')")
   target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)

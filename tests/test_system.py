@@ -37,9 +37,10 @@ def test_full_flow_and_permissions():
  assert client.put('/api/users/2',json={'name':'support','username':'support','role':'ts','devices':[]},headers=H).status_code==200
  support.post('/api/login',json={'username':'support','password':'secure-pass-123'})
  assert support.get(f'/api/devices/{d}').status_code==404
- assert client.post(f'/api/devices/{d}/revoke',json={},headers=H).status_code==200
+ assert client.post(f'/api/devices/{d}/revoke',json={},headers=H).status_code==404
+ assert client.delete(f'/api/devices/{d}',headers=H).status_code==200
  assert client.post('/api/agent/report',json=payload,headers=headers).status_code==401
- assert client.post('/api/agent/enroll',json={'uuid':uid,'claim':claim,'inventory':{'hostname':'TEST-PC'}}).json()['status']=='revoked'
+ assert client.post('/api/agent/enroll',json={'uuid':uid,'claim':claim,'inventory':{'hostname':'TEST-PC'}}).json()['status']=='approved'
 
 def test_disk_collector_identity_mapping():
  import agent.collectors as c
@@ -48,7 +49,7 @@ def test_disk_collector_identity_mapping():
   assert isinstance(rows,list)
   assert all('serial_number' in d and 'disk_identity' in d for d in rows)
 
-def test_delete_device_cleans_data_and_blocks_reenrollment():
+def test_delete_device_cleans_data_and_allows_reenrollment():
  from backend.main import UserDeviceAccess,Alert,Audit,DeletedDevice
  with DB() as s:
   a=User(name='Delete Admin',username='deleteadmin',password=password('secure-pass-123'),role='super_admin')
@@ -67,14 +68,18 @@ def test_delete_device_cleans_data_and_blocks_reenrollment():
  assert viewer.get(f'/api/devices/{did}/history').status_code==404
  assert did not in [d['id'] for d in admin.get('/api/devices').json()['items']]
  assert admin.delete(f'/api/devices/{did}',headers=H).status_code==404
- assert anon.post('/api/agent/enroll',json={'uuid':uid,'claim':'z'*64,'inventory':{'hostname':'DELETE-PC'}}).status_code==403
  with DB() as s:
   assert s.get(Device,did) is None
   assert s.query(Sample).filter_by(device_id=did).count()==0
   assert s.query(Alert).filter_by(device_id=did).count()==0
   assert s.query(UserDeviceAccess).filter_by(device_id=did).count()==0
-  assert s.get(DeletedDevice,uid) is not None
+  assert s.get(DeletedDevice,uid) is None
   assert s.query(Audit).filter_by(action='delete_device').count()==1
+ assert anon.post('/api/agent/enroll',json={'uuid':uid,'claim':'z'*64,'inventory':{'hostname':'DELETE-PC','store_code':'00115'}}).json()['status']=='approved'
+ new_token=anon.post('/api/agent/claim',json={'uuid':uid,'claim':'z'*64}).json()['credential']
+ assert anon.post('/api/agent/report',json={'event_id':str(uuid.uuid4()),'collected_at':time.time(),'kind':'heartbeat','payload':{}},headers={'Authorization':'Bearer '+new_token}).status_code==200
+ assert viewer.get('/api/devices').json()['total']==0  # Deleted assignments do not return.
+
 
 def test_super_admin_all_devices_and_session_lifecycle():
  from backend.main import LoginSession,UserDeviceAccess,digest

@@ -60,3 +60,14 @@ Snapshot storage hanya mengubah kondisi terbaru di device, tanpa Sample/history 
 Installer meminta kode store dan mempertahankan nilai lama saat update. Kode adalah string (leading zero dipertahankan), tampil/cari di daftar dan detail PC serta CSV/XLSX. Kolom database ditambahkan secara idempotent tanpa menghapus device. Akses TS tetap assignment PC langsung, tidak otomatis berdasarkan kode store.
 
 Validasi: 36 tes pytest lulus, termasuk parser, partial/recovery/stale, encoding, serial/order, latest-only storage, alert dedup/recovery/component change, antrean offline, migrasi database lama, pencarian/ekspor kode store dan permission PC. Tes browser desktop/mobile lulus termasuk live update Health 95->94 tanpa menutup dialog, serta dropdown assignment. EXE baru dibuild dengan capability manifest + checksum; paket menolak template jadwal lama. EXE diuji dengan XML fixture melalui HTTPS server/DB sementara. XML contoh lokal asli juga berhasil dibaca terpisah untuk dua disk; file asli tidak masuk GitHub. Service install/reboot/Sentinel auto-export di PC store masih perlu pilot.
+
+
+## Pengelolaan perangkat dan tampilan suhu terbaru
+
+Tombol serta API Revoke dihapus. Hapus perangkat membersihkan record/histori/alert/assignment tanpa memblokir UUID. Agent yang menerima 401 membuang credential saja, mempertahankan UUID/claim/store code dan queue, lalu mendaftar ulang otomatis pada siklus berikutnya tanpa restart. Snapshot Sentinel dan metrics dikirim ulang. Penanda deleted lama tidak lagi menghalangi enrollment. Identitas disimpan atomik menggunakan replace file sementara. Assignment TS yang dihapus tidak otomatis kembali.
+
+Tampilan suhu menggunakan &deg;C agar tidak berubah menjadi ?C karena encoding. Nilai kosong N/A; suhu di atas threshold diberi warna berbeda. UI menampilkan satu tindakan Hapus dengan penjelasan/konfirmasi bahwa agent aktif bisa muncul kembali. Template executable ditandai manifest format 3 dengan capability reenrollment_after_delete untuk menolak paket lama yang belum mendukung pemulihan credential.
+
+Validasi unit/integrasi: 38 tes lulus, termasuk 401 recovery tanpa mengganti UUID, delete/re-enroll, penanda deleted lama, penghapusan assignment, serta regresi seluruh alur lain. Tes browser memastikan simbol derajat tampil benar dan tidak ada tombol Revoke. Uji EXE hidup melalui HTTPS dilakukan terpisah menggunakan server/database sementara; tidak memasang service pada sistem operasional.
+
+Uji EXE final lulus: satu proses agent tetap hidup, PC dihapus lewat API dashboard, XML berubah, agent menerima 401 lalu kembali terdaftar dengan UUID/kode store yang sama dan mengirim metrics/Sentinel baru. Server tes menggunakan HTTPS dengan CA tervalidasi; database tes memastikan hanya histori CPU baru yang tersisa.

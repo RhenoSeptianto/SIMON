@@ -10,3 +10,6 @@ Tidak perlu Python pada PC store. Tidak perlu port inbound di PC store. Service 
 SSD/HDD: mengikuti ekspor otomatis HDSentinel.xml (sekitar 10 detik). Arahkan ekspor Sentinel ke C:\Program Files\SIMON\HDSentinel.xml. Kondisi disk terbaru saja; riwayat alert penting tetap dicatat. CPU/RAM/drive: sekitar 5 menit. Heartbeat: sekitar 2 menit. Internet/server putus: antrean offline terbatas 2.000 event dan retry otomatis. CPU store tetap perlu diukur lewat pilot beberapa PC.
 
 stop.bat/start.bat/uninstall.bat memerlukan Administrator. diagnose.bat membaca hardware tanpa mengirim data; jangan menyebarkan hasil diagnostik berisi serial/IP ke publik. Binary belum ditandatangani; uji pilot dan kebijakan Windows kantor sebelum rollout luas. Jangan mematikan antivirus.
+
+
+Jika PC dihapus dari dashboard tetapi service masih berjalan, agent versi terbaru akan enrollment ulang otomatis pada pengiriman berikutnya dengan UUID/kode store yang sama. Histori/assignment yang dihapus tidak dikembalikan. Untuk menghentikan pengiriman secara tetap, hentikan atau uninstall service pada PC store.

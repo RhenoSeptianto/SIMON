@@ -183,8 +183,8 @@ def save_device_assignments(id:int,v:DeviceAssignments,u=Depends(admin),s:Sessio
 @app.delete('/api/devices/{id}')
 def delete_device(id:int,u=Depends(admin),s:Session=Depends(db)):
  d=device(s,id,u)
- # Keep a UUID tombstone so an old agent cannot recreate a deleted PC.
- if not s.get(DeletedDevice,d.uuid): s.add(DeletedDevice(uuid=d.uuid))
+ # Delete only the server record. An active agent may enroll again with its UUID.
+ s.query(DeletedDevice).filter_by(uuid=d.uuid).delete(synchronize_session=False)
  s.query(UserDeviceAccess).filter_by(device_id=id).delete(synchronize_session=False)
  s.query(Sample).filter_by(device_id=id).delete(synchronize_session=False)
  s.query(Alert).filter_by(device_id=id).delete(synchronize_session=False)
@@ -196,19 +196,12 @@ def history(id:int,hours:int=Query(default=24,ge=1,le=168),u=Depends(user),s:Ses
  device(s,id,u)
  rows=s.query(Sample).filter(Sample.device_id==id,Sample.collected>=now()-hours*3600).order_by(Sample.collected.desc()).limit(5000).all()
  return [{'collected_at':x.collected,**json.loads(x.payload)} for x in reversed(rows)]
-@app.post('/api/devices/{id}/{action}')
-def approve(id:int,action:str,u=Depends(admin),s:Session=Depends(db)):
- if action not in ('approve','reject','revoke'): raise HTTPException(404)
- d=device(s,id,u); d.status={'approve':'approved','reject':'rejected','revoke':'revoked'}[action]
- if action!='approve': d.credential=None
- audit(s,u.id,action,id); s.commit(); return {'ok':True}
 class Enrollment(BaseModel):
  uuid:str=Field(min_length=32,max_length=64); claim:str=Field(min_length=40,max_length=200); inventory:dict
 @app.post('/api/agent/enroll')
 def enroll(v:Enrollment,request:Request,s:Session=Depends(db)):
  limit(('enroll',request.client.host),10)
  if len(json.dumps(v.inventory))>100000: raise HTTPException(413)
- if s.get(DeletedDevice,v.uuid): raise HTTPException(403,'Perangkat sudah dihapus oleh admin')
  d=s.query(Device).filter_by(uuid=v.uuid).first()
  if d:
   if not hmac.compare_digest(d.claim,digest(v.claim)): raise HTTPException(403)

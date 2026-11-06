@@ -47,7 +47,7 @@ Antrean offline dibatasi 2.000 event (event tertua dibuang saat penuh), timeout 
 
 Overview, Devices dengan pencarian/status/pagination, detail PC bertab, grafik CPU/RAM interaktif, assignment TS melalui dropdown, Users, Alerts storage, CSV/XLSX Reports, Audit, dan Database backup/reset. Reset memerlukan konfirmasi RESET, membuat backup terlebih dahulu, menghapus data monitoring tetapi mempertahankan akun/password dan audit. Semua user bisa mengganti password sendiri, minimal satu karakter. Perubahan password mengakhiri seluruh sesi akun.
 
-Hapus PC menghapus histori, alert dan assignment serta memblokir UUID lama agar agent tidak muncul kembali otomatis. Revoke mencabut credential tetapi mempertahankan data. Menghapus dan revoke tidak menghentikan service Windows dari jarak jauh.
+Hapus PC menghapus histori, alert dan assignment. Jika agent masih aktif, perangkat otomatis mendaftar dan mengirim data kembali dengan UUID/kode store yang sama; assignment TS perlu diberikan lagi. Tidak ada tombol Revoke. Untuk menghentikan pengiriman seterusnya, hentikan/uninstall service pada PC store. Menghapus dari dashboard tidak menghentikan service Windows dari jarak jauh.
 
 ## Development lokal
 
@@ -90,3 +90,6 @@ Agent memantau timestamp/ukuran file sekitar 5?8 detik sekali, membaca file yang
 Snapshot disk disimpan hanya sebagai kondisi terbaru, bukan baris histori. Antrean offline disk juga digabung menjadi snapshot terbaru. Histori CPU/RAM/drive tetap 5 menit. Alert menyimpan health turun dibanding laporan sebelumnya, health di bawah batas (default 80%, environment SENTINEL_HEALTH_WARNING), suhu >65 C, dan perubahan identitas disk; kondisi berulang dideduplikasi. Saat agent offline, perubahan sementara yang tidak sempat dikirim tidak dijamin masuk riwayat alert. File XML asli dan informasi registrasi Sentinel tidak diupload ke GitHub.
 
 Update ini **memerlukan build EXE baru**. Urutan: git pull pada kantor, jalankan setup-server.bat untuk memperbarui server/migrasi kolom kode store, jalankan tools/build-agent.bat atau download template GitHub Actions terbaru, lalu make-agent-package.bat. Template lama ditolak lewat manifest/checksum agar agent jadwal lama tidak terselip dalam paket baru. Install ulang paket baru di store, isi kode store, dan pastikan Sentinel memperbarui XML. Identitas/queue/assignment tetap dipertahankan.
+
+
+Pendaftaran ulang setelah hapus membutuhkan EXE terbaru dengan capability reenrollment_after_delete. Agent yang menerima HTTP 401 membuang credential yang tidak berlaku, menyimpan UUID/claim secara atomik, lalu enrollment ulang pada siklus berikutnya. Queue tetap dipertahankan, snapshot Sentinel dan metrics dipaksa dikirim lagi. Jika installer/agent lama masih terpasang, update paket agar mekanisme ini tersedia. Tampilan suhu memakai simbol derajat HTML (&deg;C) dan N/A untuk data kosong.

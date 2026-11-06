@@ -45,7 +45,9 @@ def parse_report(data):
 
 class SentinelWatcher:
     def __init__(self,path=DEFAULT_XML,stale_seconds=120):
-        self.path=Path(path);self.stale_seconds=stale_seconds;self.signature=None;self.digest=None;self.last_status=None
+        self.path=Path(path);self.stale_seconds=stale_seconds;self.reset()
+    def reset(self):
+        self.signature=None;self.digest=None;self.last_status=None
     def _status(self,status,message):
         key=(status,message)
         if key==self.last_status:return None
