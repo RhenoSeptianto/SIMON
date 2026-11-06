@@ -1,3 +1,19 @@
+# Mode default: Startup user (tanpa Administrator)
+
+Ekstrak ke D:\SIMONAgent-store, klik dua kali install.bat (atau install-user.bat) sebagai user biasa, isi kode store. Installer membuat shortcut SIMON Agent.lnk di Startup user dan menjalankan peluncur tersembunyi. EXE tetap di SIMONAgent/SIMONAgent.exe; XML tetap di SIMONAgent/HDSentinel.xml. Tidak membuat service atau mengubah kebijakan antivirus.
+
+Konfigurasi, CA dan log pemasangan/startup ada di %LOCALAPPDATA%/SIMON; identitas/antrean/log agent di %LOCALAPPDATA%/SIMON/data. Lokasi ini sama dengan percobaan manual store 417: jangan dihapus supaya UUID tetap. Jalankan installer di akun Windows yang biasa dipakai store. Agent otomatis aktif setelah akun itu login, tetap berjalan saat layar dikunci dan berhenti saat logout. PC yang otomatis masuk Desktop juga otomatis menjalankan Startup.
+
+Installer tidak menjalankan salinan kedua bila EXE dari lokasi itu masih berjalan. Untuk beralih dari uji manual, tutup agent manual dengan Ctrl+C sebelum instalasi. Setelah instalasi, reboot/login untuk uji Startup. Jalankan check-agent.bat sebagai user biasa untuk memeriksa mode user; event Windows tertentu mungkin hanya tersedia untuk administrator. start-user.bat menjalankan peluncur lagi; uninstall-user.bat menghapus shortcut Startup (agent yang sudah berjalan berhenti saat logout). Jangan menjalankan start.bat/stop.bat/uninstall.bat untuk mode user: file itu khusus service.
+
+Bila kebijakan organisasi memblokir PowerShell, Startup atau EXE, mode ini juga bisa gagal dan tercatat di log sejauh proses sempat berjalan. Script tidak menonaktifkan antivirus atau mengubah kebijakan organisasi. Local process ExecutionPolicy Bypass hanya dipakai oleh launcher BAT/shortcut seperti installer sebelumnya, tidak mengubah setting permanen Windows.
+
+Untuk paket terbaru dari source server, cukup git pull lalu make-agent-package.bat bila EXE sudah mendukung in_place_install. Tidak perlu rebuild EXE untuk perubahan installer Startup ini. Paket pembaruan SIMON-startup-update.zip hanya berisi script/README; ekstrak ke folder paket agent yang sudah ada tanpa mengganti EXE, CA, XML atau data.
+
+## Mode service opsional (memerlukan Administrator)
+
+Gunakan install-service.bat bila memang ingin service otomatis sebelum login. Instruksi berikut berlaku untuk mode service:
+
 # Paket agent SIMON (Windows 10/11 x64)
 
 1. Ekstrak paket ke lokasi permanen, contoh D:\SIMONAgent-store. Jangan menjalankan langsung dari ZIP.

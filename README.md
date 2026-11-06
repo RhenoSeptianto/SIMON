@@ -111,3 +111,7 @@ Default heartbeat dan koleksi CPU/RAM/kapasitas drive menjadi 10 detik dengan ji
 Jadwal ada di EXE agent: build/pasang paket baru untuk menerapkan 10 detik. Template format 5 dengan capability ten_second_metrics dan in_place_install diperlukan. Update server lebih dahulu, lalu build agent, buat paket store dan install ulang. UUID/config/kode store dipertahankan. Tidak ada perubahan interval inventory statis (24 jam). Loop ringan memeriksa metadata XML sekitar satu detik; file diparse/dikirim hanya saat berubah. Tidak ada pemanggilan disk scan tambahan.
 
 Log pemasangan: `install.log` di folder paket. Jalankan `check-agent.bat` sebagai Administrator untuk laporan `check-agent.log` berisi status service, akses file/data, koneksi HTTPS, log worker dan event keamanan Windows terkait. Access denied tidak otomatis berarti Sangfor memblokir; cocokkan dengan konsol Sangfor.
+
+## Startup user tanpa service
+
+Default install.bat kini memasang mode Startup user tanpa administrator. Isi kode store; installer menyimpan config/CA di LocalAppData/SIMON, memakai state LocalAppData/SIMON/data (kompatibel percobaan manual), membuat shortcut Startup dan menjalankan agent. EXE/XML tetap di folder paket drive D. Otomatis setelah user login, bukan sebelum login. install-service.bat tetap tersedia untuk mode service. Lihat deployment/agent/README.md untuk pembaruan dan pemeriksaan log.

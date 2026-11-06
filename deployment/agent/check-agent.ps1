@@ -1,12 +1,26 @@
 ﻿$ErrorActionPreference='Continue'
-$report=Join-Path $PSScriptRoot 'check-agent.log'
+$userDir=Join-Path $env:LOCALAPPDATA 'SIMON'
+$userConfig=Join-Path $userDir 'config.json'
+$userMode=Test-Path -LiteralPath $userConfig
+$report=if($userMode){Join-Path $userDir 'check-agent.log'}else{Join-Path $PSScriptRoot 'check-agent.log'}
 Start-Transcript -LiteralPath $report -Append -ErrorAction Stop | Out-Null
 try {
     Write-Host "=== SIMON pemeriksaan $(Get-Date -Format s) ==="
     $folder=Join-Path $PSScriptRoot 'SIMONAgent'
     $exe=Join-Path $folder 'SIMONAgent.exe'
-    $config=Join-Path $folder 'config.json'
-    foreach($path in @($exe,$config,(Join-Path $folder 'ca.crt'),(Join-Path $folder 'HDSentinel.xml'))) {
+    $config=if($userMode){$userConfig}else{Join-Path $folder 'config.json'}
+    $settings=$null
+    if($userMode){
+        $settings=Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
+        $launcher=Get-Content -LiteralPath (Join-Path $userDir 'launcher.json') -Raw | ConvertFrom-Json
+        $exe=$launcher.exe;$folder=Split-Path -Parent $exe
+        Write-Host 'Mode Startup user: service tidak diperlukan.'
+        $startupLink=Join-Path ([Environment]::GetFolderPath('Startup')) 'SIMON Agent.lnk'
+        Write-Host "Shortcut Startup ada: $(Test-Path -LiteralPath $startupLink)"
+    }
+    $dataDir=if($userMode){$settings.state}else{Join-Path $folder 'data'}
+    $caPath=if($userMode){Join-Path $userDir 'ca.crt'}else{Join-Path $folder 'ca.crt'}
+    foreach($path in @($exe,$config,$caPath,(Join-Path $folder 'HDSentinel.xml'))) {
         try {
             $item=Get-Item -LiteralPath $path -ErrorAction Stop
             Write-Host "ADA: $path ($($item.Length) byte), diubah $($item.LastWriteTime)"
@@ -18,7 +32,7 @@ try {
     if($service) { $service | Select-Object Name,State,StartMode,PathName,ExitCode | Format-List }
     else { Write-Host 'SERVICE BELUM TERDAFTAR' }
     try {
-        $probe=Join-Path $folder 'data\diagnostic-write.tmp'
+        $probe=Join-Path $dataDir 'diagnostic-write.tmp'
         [IO.File]::WriteAllText($probe,'test');Remove-Item -LiteralPath $probe -ErrorAction Stop
         Write-Host 'Akses tulis folder data: OK'
     } catch { Write-Host "AKSES TULIS GAGAL: $($_.Exception.Message)" }
@@ -30,11 +44,12 @@ try {
         } catch { Write-Host "EXE GAGAL DIJALANKAN: $($_.Exception.Message)" }
     }
     Write-Host '=== Log agent terakhir ==='
-    $log=Join-Path $folder 'data\agent.log'
+    $log=Join-Path $dataDir 'agent.log'
     if(Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 40 }
     else { Write-Host 'Log agent belum dibuat; worker mungkin belum berjalan.' }
-    $workerLog=Join-Path $folder 'data\service-worker.log'
+    $workerLog=Join-Path $dataDir 'service-worker.log'
     if(Test-Path -LiteralPath $workerLog) { Write-Host '=== Log startup worker ==='; Get-Content -LiteralPath $workerLog -Tail 25 }
+    if($userMode){foreach($name in @('startup.log','worker-stderr.log')){$path=Join-Path $userDir $name;if(Test-Path -LiteralPath $path){Write-Host "=== $name ===";Get-Content -LiteralPath $path -Tail 25}}}
     $since=(Get-Date).AddHours(-2)
     foreach($channel in @('System','Microsoft-Windows-CodeIntegrity/Operational','Microsoft-Windows-AppLocker/EXE and DLL','Microsoft-Windows-Windows Defender/Operational')) {
         Write-Host "=== Event Windows: $channel (2 jam terakhir, terkait SIMON) ==="

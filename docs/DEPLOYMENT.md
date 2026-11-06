@@ -111,3 +111,7 @@ Histori CPU/RAM dipadatkan per 5 menit (HISTORY_INTERVAL_SECONDS default 300) ag
 ### Log instalasi dan pemeriksaan agent
 
 install.log mencatat tahap instalasi dan error; check-agent.bat/status.bat menghasilkan check-agent.log dengan pemeriksaan file, service/path/exit code, akses tulis, EXE/HTTPS terverifikasi CA, log agent dan startup worker, serta event Windows terkait. Tidak mengubah kebijakan antivirus. Sangfor mungkin menyimpan blokir hanya di konsol pengelola. Bila PowerShell tidak boleh dijalankan, launcher BAT mencatat kode keluar sebisa mungkin.
+
+### Default terbaru: mode Startup user
+
+Install.bat kini memasang Startup akun Windows tanpa administrator. Isi kode store, EXE/XML tetap di folder paket dan config/data/log di LocalAppData/SIMON. install-service.bat adalah pilihan service lama yang perlu admin. Untuk store 417, tutup agent manual dengan Ctrl+C sebelum install.bat, pertahankan LocalAppData/SIMON/data. Update script saja cukup git pull dan make-agent-package.bat; tidak perlu rebuild EXE. Uji reboot/login untuk memastikan Startup diizinkan kebijakan PC.
