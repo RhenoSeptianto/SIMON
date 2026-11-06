@@ -84,7 +84,15 @@ def device(s,id,u):
  if not d or not allowed(u,d): raise HTTPException(404,'Perangkat tidak ditemukan')
  return d
 def serialize(d):
- return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<int(os.getenv('OFFLINE_SECONDS','420')),'last_seen':d.last_seen,'inventory':json.loads(d.inventory),'metrics':localize_metrics(json.loads(d.metrics))}
+ inventory=json.loads(d.inventory)
+ # Keep legacy agents online using their old grace window during gradual rollout.
+ grace=420
+ try:
+  interval=float(inventory.get('heartbeat_interval_seconds',0))
+  if 0<interval<86400:grace=max(45,interval*3+15)
+ except (ValueError,TypeError):pass
+ if os.getenv('OFFLINE_SECONDS'):grace=float(os.environ['OFFLINE_SECONDS'])
+ return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<grace,'last_seen':d.last_seen,'inventory':inventory,'metrics':localize_metrics(json.loads(d.metrics))}
 class Login(BaseModel):
  username:str; password:str
 attempts={}
@@ -244,8 +252,11 @@ def report(v:Telemetry,d=Depends(agent),s:Session=Depends(db)):
  elif v.kind!='heartbeat':
   m=json.loads(d.metrics); previous=dict(m)
   # Only CPU/RAM samples create history. Storage is an upsert of latest state.
-  if v.kind=='metrics' and not s.query(Sample).filter_by(event_id=v.event_id).first():
-   s.add(Sample(device_id=d.id,event_id=v.event_id,collected=v.collected_at,payload=json.dumps(v.payload)))
+  if v.kind=='metrics':
+   last_sample=s.query(Sample).filter_by(device_id=d.id).order_by(Sample.collected.desc()).first()
+   history_interval=float(os.getenv('HISTORY_INTERVAL_SECONDS','300'))
+   if (last_sample is None or v.collected_at-last_sample.collected>=history_interval) and not s.query(Sample).filter_by(event_id=v.event_id).first():
+    s.add(Sample(device_id=d.id,event_id=v.event_id,collected=v.collected_at,payload=json.dumps(v.payload)))
   if v.collected_at>=m.get(v.kind+'_at',0):
    m.update(v.payload); m[v.kind+'_at']=v.collected_at; d.metrics=json.dumps(m)
    evaluate(s,d,m,previous)

@@ -43,7 +43,7 @@ Buka status.bat. Perangkat muncul otomatis di SIMON, Super Admin memilih TS lang
 
 PC store harus Windows 10/11 **x64** dan bisa menjangkau 172.18.123.92 melalui LAN/VPN. Tes `Test-NetConnection 172.18.123.92 -Port 8443`. Tidak membuka port inbound di store. Jika gagal, perbaiki routing/VPN/firewall; IP private tidak dapat diakses lewat internet biasa. Store yang tidak terhubung jaringan kantor belum bisa rollout.
 
-Data disk: mengikuti perubahan XML Sentinel (sekitar 10 detik); CPU/RAM/drive sekitar 5 menit; heartbeat sekitar 2 menit. Log berotasi, queue 2.000 event. Service LocalSystem dipakai untuk boot tanpa login dan akses konfigurasi/state yang dilindungi. Pembacaan SMART hardware dilakukan Sentinel, bukan agent. Binary belum code-signed. Uji pilot 1–2 PC store, reboot, offline/reconnect dan beban CPU/RAM sebelum rollout masal. Installer/service tidak boleh dianggap lulus uji boot hanya karena binary berhasil dibuild.
+Data disk: mengikuti perubahan XML Sentinel (sekitar 10 detik); CPU/RAM/drive sekitar 10 detik; heartbeat sekitar 10 detik. Log berotasi, queue 2.000 event. Service LocalSystem dipakai untuk boot tanpa login dan akses konfigurasi/state yang dilindungi. Pembacaan SMART hardware dilakukan Sentinel, bukan agent. Binary belum code-signed. Uji pilot 1–2 PC store, reboot, offline/reconnect dan beban CPU/RAM sebelum rollout masal. Installer/service tidak boleh dianggap lulus uji boot hanya karena binary berhasil dibuild.
 
 ## 5. Update source kantor
 
@@ -81,7 +81,7 @@ Setelah git pull pada PC kantor, jalankan make-agent-package.bat sebagai Adminis
 3. Buat ulang paket store dan jalankan install.bat sebagai Administrator. Isi kode store (contoh 00115). Update berikutnya dapat memakai Enter untuk mempertahankan kode lama.
 4. Atur Sentinel mengekspor XML setiap 10 detik ke C:\Program Files\SIMON\HDSentinel.xml. Pastikan Sentinel juga berjalan otomatis serta memiliki izin menulis di folder tersebut. Agent tidak menginstal/mengonfigurasi Sentinel atau mengubah frekuensi scan Sentinel. Jika Sentinel belum berjalan setelah boot, status missing/stale muncul dan agent terus memantau sampai XML tersedia.
 
-Agent memantau metadata file sekitar 5?8 detik, membaca perubahan lengkap dan mengirim snapshot disk. Tidak ada lagi jadwal 16.00/pemeriksaan storage lewat PowerShell. CPU/RAM/drive tetap sekitar 5 menit, heartbeat sekitar 2 menit. Dashboard detail mengambil nilai disk terbaru setiap 10 detik tanpa mereset tab atau dropdown assignment.
+Agent memantau metadata file sekitar satu detik, membaca perubahan lengkap dan mengirim snapshot disk. Tidak ada lagi jadwal 16.00/pemeriksaan storage lewat PowerShell. CPU/RAM/drive tetap sekitar 10 detik, heartbeat sekitar 10 detik. Dashboard detail mengambil nilai disk terbaru setiap 10 detik tanpa mereset tab atau dropdown assignment.
 
 Disk diidentifikasi berdasarkan serial (fallback model+lokasi hanya jika tersedia). Health/performance tidak ditafsirkan sebagai wear. Ringkasan hanya mengambil field disk/report yang diperlukan; informasi registrasi Sentinel tidak dikirim. XML missing/partial/stale lebih dari 2 menit ditandai, data valid terakhir dipertahankan. Ekspor XML tiap 10 detik bukan jaminan hardware Sentinel benar-benar melakukan scan tiap 10 detik; waktu/status pemantauan dari laporan tetap ditampilkan.
 
@@ -100,3 +100,10 @@ Update server lalu gunakan template EXE terbaru (manifest format 3, capability r
 Tarik source terbaru lalu jalankan setup-server.bat sebagai Administrator untuk memulai ulang backend. Browser Ctrl+F5. Agent tidak perlu diubah/dibuild ulang untuk fitur ini. UI Storage menerjemahkan pesan Sentinel di server, menyimpan teks sumber asli. Jika pesan belum dikenali, tampil pemberitahuan bahasa Indonesia untuk memeriksa Sentinel; tidak menyimpulkan disk sehat.
 
 Menu Laporan mengekspor XLSX saja dengan tiga sheet Perangkat, SSD-HDD, Kapasitas Drive. CSV dinonaktifkan. Semua sheet dibatasi oleh akses PC user, termasuk disk/volume. Kode store string menjaga nol di depan; sel numerik/tanggal memiliki tipe yang benar, filter dan freeze header tersedia, teks asing tidak dijalankan sebagai formula. File menggunakan tanggal WIB.
+
+
+## Interval angka terbaru 10 detik
+
+Default interval CPU/RAM/drive dan heartbeat pada agent terbaru adalah 10 detik. Perlu EXE baru (manifest format 4, capability ten_second_metrics). Update backend dengan setup-server.bat, build template baru, buat paket store lalu install ulang. Metadata interval disertakan dalam inventory agar server memakai toleransi offline sekitar 45 detik untuk agent baru; agent lama tetap memakai toleransi lamanya sampai diupdate. Override OFFLINE_SECONDS tetap didukung.
+
+Histori CPU/RAM dipadatkan per 5 menit (HISTORY_INTERVAL_SECONDS default 300) agar database tetap ringan; kondisi terbaru untuk dashboard/laporan tetap setiap 10 detik. Detail PC memperbarui CPU/RAM, sisa drive, koneksi, dan Sentinel otomatis tanpa menutup dialog atau mereset assignment.

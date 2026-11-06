@@ -31,7 +31,7 @@ def test_agent_watches_sentinel_and_keeps_metrics_interval(monkeypatch,tmp_path)
  config=tmp_path/'test-config.json';config.write_text(json.dumps({'store_code':'00115'}))
  monkeypatch.setattr('sys.argv',['agent','--config',str(config),'--state',str(tmp_path)])
  with pytest.raises(KeyboardInterrupt):agent.run()
- assert calls=={'xml':3,'metrics':2}
+ assert calls=={'xml':3,'metrics':3}
  with sqlite3.connect(tmp_path/'queue.db') as db:
   rows=[json.loads(row[0]) for row in db.execute('select payload from queue')]
  assert len([r for r in rows if r['kind']=='storage'])==1

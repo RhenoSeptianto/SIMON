@@ -7,7 +7,7 @@
 
 Tidak perlu Python pada PC store. Tidak perlu port inbound di PC store. Service berjalan sebagai LocalSystem agar reliability counter Windows dapat dibaca. State/credential disimpan di ProgramData/SIAMS dengan ACL administrator/SYSTEM; konfigurasi di ProgramData/SIMON. Jangan salin folder state antarkomputer. Install ulang mempertahankan UUID. Uninstall hanya melepas service dan mempertahankan state/binary.
 
-SSD/HDD: mengikuti ekspor otomatis HDSentinel.xml (sekitar 10 detik). Arahkan ekspor Sentinel ke C:\Program Files\SIMON\HDSentinel.xml. Kondisi disk terbaru saja; riwayat alert penting tetap dicatat. CPU/RAM/drive: sekitar 5 menit. Heartbeat: sekitar 2 menit. Internet/server putus: antrean offline terbatas 2.000 event dan retry otomatis. CPU store tetap perlu diukur lewat pilot beberapa PC.
+SSD/HDD: mengikuti ekspor otomatis HDSentinel.xml (sekitar 10 detik). Arahkan ekspor Sentinel ke C:\Program Files\SIMON\HDSentinel.xml. Kondisi disk terbaru saja; riwayat alert penting tetap dicatat. CPU/RAM/drive: sekitar 10 detik. Heartbeat: sekitar 10 detik. Internet/server putus: antrean offline terbatas 2.000 event dan retry otomatis. CPU store tetap perlu diukur lewat pilot beberapa PC.
 
 stop.bat/start.bat/uninstall.bat memerlukan Administrator. diagnose.bat membaca hardware tanpa mengirim data; jangan menyebarkan hasil diagnostik berisi serial/IP ke publik. Binary belum ditandatangani; uji pilot dan kebijakan Windows kantor sebelum rollout luas. Jangan mematikan antivirus.
 

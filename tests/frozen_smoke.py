@@ -33,17 +33,18 @@ def main():
    payload=json.loads(metrics);assert 'cpu_usage' in payload and 'ram_total' in payload
    assert len(payload['disks'])==1 and payload['disks'][0]['source']=='sentinel'
    assert db.execute('select store_code from devices').fetchone()[0]=='00115'
-   assert db.execute('select count(*) from telemetry').fetchone()[0]==2
+   assert db.execute('select count(*) from telemetry').fetchone()[0]==1
   # Exercise delete/re-enroll while the SAME executable process keeps running.
   import hashlib,secrets
   salt=secrets.token_hex(16);hashed=salt+':'+hashlib.scrypt(b'smoke-pass',salt=salt.encode(),n=16384,r=8,p=1).hex()
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:
    db.execute("insert into users(name,username,password,role,active,stores) values(?,?,?,?,?,?)",('Smoke Admin','smokeadmin',hashed,'super_admin',1,'[]'))
+  live_started=time.time()
   worker=subprocess.Popen(command[:-1],cwd=ROOT,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=0x08000000)
   try:
    for _ in range(45):
-    with sqlite3.connect(sandbox/'db'/'siams.db') as db: samples=db.execute('select count(*) from telemetry').fetchone()[0]
-    if samples>=3:break
+    with sqlite3.connect(sandbox/'db'/'siams.db') as db: current=json.loads(db.execute('select metrics from devices').fetchone()[0])
+    if current.get('metrics_at',0)>live_started:break
     time.sleep(1)
    else:raise RuntimeError('Live agent did not send startup metrics')
    time.sleep(1)

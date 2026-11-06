@@ -82,7 +82,7 @@ try:
   expect(dialog.get_by_text('Tidak aktif (tanpa pemantauan) sejak 6 November 2026, 15.58.38',exact=True)).to_be_visible()
   assert 'The status of' not in dialog.inner_text()
   with DB() as s:
-   live=s.get(Device,did);values=json.loads(live.metrics);values['disks'][0]['health_percent']=94;live.metrics=json.dumps(values);s.commit()
+   live=s.get(Device,did);values=json.loads(live.metrics);values['disks'][0]['health_percent']=94;values['cpu_usage']=42;live.metrics=json.dumps(values);s.commit()
   expect(dialog.get_by_text('Kesehatan 94%',exact=True)).to_be_visible(timeout=15000)
   page.get_by_role('tab',name='Histori',exact=True).click();expect(page.locator('#historySlider')).to_be_visible()
   expect(page.locator('#historyTooltip')).to_contain_text('CPU 23%')
@@ -90,7 +90,7 @@ try:
   page.get_by_label('Periode histori').select_option('1');expect(page.get_by_text('Belum ada sampel pada periode ini')).to_be_visible()
   page.get_by_label('Periode histori').select_option('168');expect(page.locator('#historySVG')).to_be_visible()
   page.get_by_role('tab',name='Akses User',exact=True).click();expect(page.get_by_role('button',name='Revoke credential',exact=True)).to_have_count(0);page.get_by_label('Pilih user TS').select_option(label='QA TS (qats)');page.get_by_role('button',name='Assign',exact=True).click();expect(page.get_by_text('User berhasil diassign.')).to_be_visible()
-  page.get_by_role('tab',name='Ringkasan',exact=True).click();page.get_by_role('button',name='Refresh data',exact=True).click();expect(page.get_by_role('tab',name='Ringkasan')).to_have_attribute('aria-selected','true')
+  page.get_by_role('tab',name='Ringkasan',exact=True).click();expect(dialog.get_by_text('42%',exact=True)).to_be_visible();page.get_by_role('button',name='Refresh data',exact=True).click();expect(page.get_by_role('tab',name='Ringkasan')).to_have_attribute('aria-selected','true')
   page.evaluate("document.body.classList.add('dark')")
   target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)
   page.screenshot(path=str(target/'device-desktop.png'))

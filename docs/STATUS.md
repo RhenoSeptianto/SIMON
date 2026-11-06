@@ -80,3 +80,11 @@ Terjemahan offline/server untuk pesan umum Sentinel, status pemantauan dengan ta
 Menu Laporan dan ekspor XLSX tunggal dengan tiga sheet terstruktur: Perangkat, SSD-HDD, Kapasitas Drive. Seluruh sheet dibatasi visible devices, satu disk/volume per baris, nilai GiB/persen bertipe angka, timestamp Excel WIB, kode store teks, filter/freeze header/style/wrapping, mitigasi formula dan control character. Endpoint CSV mengembalikan 404. Filename SIMON-Inventaris-YYYY-MM-DD.xlsx. Agent tidak berubah/tidak perlu rebuild.
 
 Validasi: 41 pytest lulus termasuk terjemahan sehat/bermasalah/jumlah error/unknown, report 3 sheet, pemisahan disk/drive, nilai/satuan/tanggal, leading zeros, formula safety, akses user dan workbook kosong. Browser desktop/mobile/light/dark lulus, mengunduh file Excel aktual dan memeriksa sheet, memastikan CSV tidak tampil, serta memeriksa teks Indonesia pada detail Sentinel dan pembaruan live. Tidak ada JavaScript error. Koneksi/boot service agent tidak diuji ulang karena tidak diubah.
+
+## Pembaruan langsung sekitar 10 detik
+
+Default heartbeat dan CPU/RAM/kapasitas drive agent menjadi 10 detik (jitter kecil untuk menghindari kiriman serentak). Sentinel tetap mengikuti perubahan XML. Dashboard dan detail PC memperbarui nilai terbaru setiap 10 detik. Histori CPU/RAM dibatasi satu sampel per 5 menit agar database tidak cepat membesar; nilai terkini tetap diterima setiap pengiriman.
+
+Agent mengiklankan interval heartbeat dalam inventory. Server menggunakan ambang offline minimal 45 detik untuk agent baru, mempertahankan 420 detik bagi agent lama tanpa metadata; OFFLINE_SECONDS tetap dapat menggantikan nilai tersebut. Manifest EXE format 4 menambahkan capability ten_second_metrics, sehingga paket store menolak EXE lama. Perubahan ini memerlukan pembaruan server dan EXE agent; identitas serta kode store tetap dipertahankan saat update instalasi.
+
+Validasi: 43 pytest lulus, browser desktop/mobile/light/dark lulus termasuk pembaruan CPU otomatis tanpa menutup dialog. EXE final melalui HTTPS tervalidasi berhasil enroll/report, mempertahankan UUID/kode store saat restart, dan otomatis mendaftar kembali setelah dihapus dari dashboard. Histori yang masuk dalam rentang 5 menit tidak digandakan. Instalasi service/reboot pada PC store tetap dilakukan pengguna.

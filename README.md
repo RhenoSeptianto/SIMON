@@ -34,8 +34,8 @@ PC store harus Windows 10/11 **x64** dan bisa menjangkau `172.18.123.92:8443` me
 
 ## Jadwal dan data
 
-- Status koneksi: sekitar **2 menit**.
-- CPU/RAM/sisa drive: sekitar **5 menit**.
+- Status koneksi: sekitar **10 detik**.
+- CPU/RAM/sisa drive: sekitar **10 detik**.
 - Suhu/health SSD/HDD: **mengikuti perubahan HDSentinel.xml**, umumnya setiap 10 detik sesuai ekspor Sentinel.
 - Inventory statis: saat mulai dan setiap 24 jam.
 
@@ -64,7 +64,7 @@ Terminal kedua:
 .\.venv\Scripts\python.exe -m agent.main --server http://127.0.0.1:8000
 ```
 
-HTTP hanya diizinkan untuk loopback development. Agent juga mendukung `--config`, `--ca-file`, `--state`, `--once`, dan `--diagnose`. OpenAPI: `/docs`. Config/environment teknis tetap memakai beberapa nama SIAMS untuk kompatibilitas instalasi/data lama, termasuk SQLite `data/siams.db` dan cookie sesi. Environment server: `SIAMS_DATA`, `DATABASE_URL`, `OFFLINE_SECONDS` (420), `RETENTION_DAYS` (30), `SIAMS_PRODUCTION` (otomatis 1 pada runner kantor).
+HTTP hanya diizinkan untuk loopback development. Agent juga mendukung `--config`, `--ca-file`, `--state`, `--once`, dan `--diagnose`. OpenAPI: `/docs`. Config/environment teknis tetap memakai beberapa nama SIAMS untuk kompatibilitas instalasi/data lama, termasuk SQLite `data/siams.db` dan cookie sesi. Environment server: `SIAMS_DATA`, `DATABASE_URL`, `OFFLINE_SECONDS` (override; default agent baru sekitar 45 detik, agent lama 420 detik), `RETENTION_DAYS` (30), `SIAMS_PRODUCTION` (otomatis 1 pada runner kantor).
 
 ## Tes dan build
 
@@ -102,3 +102,10 @@ Keterangan, saran, status pemantauan, perkiraan sisa umur dan waktu laporan Sent
 Menu Laporan hanya menyediakan Excel: endpoint /api/reports/xlsx. Format CSV tidak lagi tersedia. File SIMON-Inventaris-YYYY-MM-DD.xlsx menggunakan tanggal WIB dan memiliki sheet Perangkat, SSD-HDD (nama sheet Excel tidak mendukung karakter /), serta Kapasitas Drive. Satu disk/volume per baris, judul kolom bahasa Indonesia, satuan GiB/persen, header dibekukan, tabel/filter, lebar kolom dan pembungkusan teks. Kode store dipertahankan sebagai teks, nilai numerik tetap angka, tanggal menjadi tanggal Excel, dan teks dari perangkat tidak dieksekusi sebagai formula. Nilai kosong ditulis Tidak tersedia.
 
 Terjemahan dan Excel ini hanya memerlukan update/restart server serta Ctrl+F5 pada browser. Tidak memerlukan perubahan config, installer atau rebuild agent.
+
+
+## Pembaruan angka terbaru setiap 10 detik
+
+Default heartbeat dan koleksi CPU/RAM/kapasitas drive menjadi 10 detik dengan jitter kecil. Tampilan daftar dan detail juga mengambil pembaruan sekitar 10 detik. XML Sentinel tetap mengikuti perubahan file. Historinya dipisahkan: server menyimpan sampel CPU/RAM setiap 300 detik (HISTORY_INTERVAL_SECONDS), tetapi kondisi terbaru tetap diupdate setiap kiriman. Ini mencegah histori membesar 30 kali lipat. Ketika agent baru berhenti, status offline memakai toleransi 45 detik agar kehilangan satu paket tidak langsung dianggap putus. Agent lama tanpa metadata interval tetap diberi jendela 420 detik saat rollout; OFFLINE_SECONDS dapat mengoverride toleransi.
+
+Jadwal ada di EXE agent: build/pasang paket baru untuk menerapkan 10 detik. Template format 4 dengan capability ten_second_metrics diperlukan. Update server lebih dahulu, lalu build agent, buat paket store dan install ulang. UUID/config/kode store dipertahankan. Tidak ada perubahan interval inventory statis (24 jam). Loop ringan memeriksa metadata XML sekitar satu detik; file diparse/dikirim hanya saat berubah. Tidak ada pemanggilan disk scan tambahan.
