@@ -53,6 +53,14 @@ def main():
   assert rejected_config.read_bytes()==before_config
   with sqlite3.connect(sandbox/'db'/'siams.db') as db:assert db.execute('select count(*) from devices').fetchone()[0]==1
   print('PASS: frozen installer rejects duplicate store code with PC name; no Startup/new device or config overwrite.')
+  # A copied UUID/claim must never rename/replace the original PC at the server.
+  original_identity=json.loads((installed/'data'/'identity.json').read_text())
+  with httpx.Client(base_url=url,verify=tls_context(str(tls/'ca.crt')),timeout=10) as client:
+   foreign=client.post('/api/agent/enroll',json={'uuid':original_identity['uuid'],'claim':original_identity['claim'],'inventory':{'hostname':'COPIED-OTHER-PC','bios_serial':'FOREIGN-SERIAL','machine_id':'foreign-machine-hash','store_code':'00222'}})
+   assert foreign.status_code==409 and foreign.json()['detail']['code']=='identity_mismatch'
+  with sqlite3.connect(sandbox/'db'/'siams.db') as db:assert db.execute('select hostname from devices').fetchone()[0]!='COPIED-OTHER-PC'
+  print('PASS: copied UUID/claim with another machine fingerprint cannot overwrite the original PC.')
+
   # Exercise delete/re-enroll while the SAME executable process keeps running.
   import hashlib,secrets
   salt=secrets.token_hex(16);hashed=salt+':'+hashlib.scrypt(b'smoke-pass',salt=salt.encode(),n=16384,r=8,p=1).hex()

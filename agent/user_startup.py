@@ -118,14 +118,23 @@ def install(root,store_code=None,startup=None,launch=True):
   # Reserve/check the code using this PC's existing UUID/claim, before creating Startup.
   import uuid,secrets,socket,httpx
   from agent.config import validate_server,tls_context
-  identity_path=state/'identity.json'
-  if not identity_path.exists():
-   temporary=identity_path.with_suffix('.json.tmp');temporary.write_text(json.dumps({'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)}),encoding='utf-8');temporary.replace(identity_path)
-  identity=json.loads(identity_path.read_text(encoding='utf-8-sig'))
+  from agent.identity import ensure_identity,machine_id
+  from agent.collectors import inventory
+  identity=ensure_identity(state)
+  try:hardware=inventory()
+  except Exception:hardware={'hostname':socket.gethostname()}
+  hardware.update(store_code=store_code,machine_id=machine_id())
   with httpx.Client(base_url=validate_server(settings.get('server','https://172.18.123.92:8443')),verify=tls_context(str(root/'ca.crt')),timeout=15) as client:
-   response=client.post('/api/agent/enroll',json={'uuid':identity['uuid'],'claim':identity['claim'],'inventory':{'hostname':socket.gethostname(),'store_code':store_code}})
-   if response.status_code==409:raise ValueError(response.json().get('detail','Kode store sudah digunakan.'))
-   if not response.is_success:raise ValueError('Pemeriksaan kode store gagal: HTTP '+str(response.status_code)+'. Konfigurasi dan Startup belum diperbarui.')
+   for attempt in range(2):
+    response=client.post('/api/agent/enroll',json={'uuid':identity['uuid'],'claim':identity['claim'],'inventory':hardware})
+    detail=response.json().get('detail','') if response.status_code==409 else ''
+    if isinstance(detail,dict) and detail.get('code')=='identity_mismatch' and attempt==0:
+     identity=ensure_identity(state,rotate=True)
+     record('Identitas tersalin dari PC lain terdeteksi; dibuat UUID terpisah. Data lama disimpan sebagai backup lokal.')
+     continue
+    if response.status_code==409:raise ValueError(detail.get('message',str(detail)) if isinstance(detail,dict) else detail)
+    if not response.is_success:raise ValueError('Pemeriksaan kode store gagal: HTTP '+str(response.status_code)+'. Konfigurasi dan Startup belum diperbarui.')
+    break
   record('Kode store diterima server untuk identitas PC ini.')
   settings.update(server=settings.get('server','https://172.18.123.92:8443'),ca_file='ca.crt',state=str(state),store_code=store_code,sentinel_xml=str(exe.parent/'HDSentinel.xml'))
   temporary=config.with_suffix('.json.tmp');temporary.write_text(json.dumps(settings,indent=2),encoding='utf-8');temporary.replace(config)

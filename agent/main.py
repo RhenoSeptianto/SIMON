@@ -43,11 +43,11 @@ def run():
   if not single_instance(state,args.server):
    logging.info('Agent dengan state yang sama sudah aktif; duplikat dibatalkan.');return
  identity=state/'identity.json'
- if not identity.exists(): save_identity(identity,{'uuid':str(uuid.uuid4()),'claim':secrets.token_urlsafe(48)})
- ident=json.loads(identity.read_text()); queue=sqlite3.connect(state/'queue.db'); queue.execute('create table if not exists queue(id integer primary key,payload text)'); queue.execute('pragma journal_size_limit=1048576')
+ from agent.identity import ensure_identity,machine_id
+ ident=ensure_identity(state);identity=state/'identity.json'; queue=sqlite3.connect(state/'queue.db'); queue.execute('create table if not exists queue(id integer primary key,payload text)'); queue.execute('pragma journal_size_limit=1048576')
  if 'kind' not in [row[1] for row in queue.execute('pragma table_info(queue)')]: queue.execute("alter table queue add column kind text not null default ''")
  queue.commit()
- def collect_inventory(): return {**inventory(),'store_code':store_code,'heartbeat_interval_seconds':schedule['heartbeat'],'metrics_interval_seconds':schedule['metrics']}
+ def collect_inventory(): return {**inventory(),'machine_id':machine_id(),'store_code':store_code,'heartbeat_interval_seconds':schedule['heartbeat'],'metrics_interval_seconds':schedule['metrics']}
  def enqueue(kind,payload):
   if kind=='storage': queue.execute("delete from queue where kind='storage'")
   queue.execute('insert into queue(payload,kind) values (?,?)',(json.dumps({'event_id':str(uuid.uuid4()),'collected_at':time.time(),'kind':kind,'payload':payload}),kind))

@@ -231,6 +231,20 @@ def commit_store(s,code):
   if owner:raise store_conflict(code,owner)
   raise
 
+def validate_machine(d,inventory):
+ previous=json.loads(d.inventory or '{}')
+ old_machine=previous.get('machine_id');new_machine=inventory.get('machine_id')
+ old_serial=str(d.serial or previous.get('bios_serial') or '').strip().casefold()
+ new_serial=str(inventory.get('bios_serial') or '').strip().casefold()
+ invalid={'','unknown','none','n/a','default string','to be filled by o.e.m.','system serial number','0','00000000'}
+ strong_serial=old_serial not in invalid and new_serial not in invalid
+ mismatch=(old_machine and new_machine and old_machine!=new_machine) or (strong_serial and old_serial!=new_serial)
+ if new_machine and not old_machine and old_serial not in invalid and new_serial in invalid:
+  mismatch=mismatch or bool(inventory.get('hostname') and str(inventory['hostname']).casefold()!=str(d.hostname).casefold())
+ if mismatch:raise HTTPException(409,detail={'code':'identity_mismatch','message':'Identitas agent milik PC '+str(d.hostname)+'. Folder data/credential tersalin ke PC berbeda. Jalankan installer terbaru untuk membuat identitas terpisah.'})
+ # Legacy inventory updates cannot silently remove an established binding.
+ if old_machine and not new_machine:inventory['machine_id']=old_machine
+
 class Enrollment(BaseModel):
  uuid:str=Field(min_length=32,max_length=64); claim:str=Field(min_length=40,max_length=200); inventory:dict
 @app.post('/api/agent/enroll')
@@ -240,6 +254,7 @@ def enroll(v:Enrollment,request:Request,s:Session=Depends(db)):
  d=s.query(Device).filter_by(uuid=v.uuid).first()
  if d:
   if not hmac.compare_digest(d.claim,digest(v.claim)): raise HTTPException(403)
+  validate_machine(d,v.inventory)
   if d.status=='approved':
    d.last_seen=now()
    if 'store_code' in v.inventory: set_store_code(s,d,v.inventory['store_code'])
@@ -273,6 +288,7 @@ def report(v:Telemetry,d=Depends(agent),s:Session=Depends(db)):
  if len(json.dumps(v.payload))>200000: raise HTTPException(413)
  d=s.get(Device,d.id); d.last_seen=now()
  if v.kind=='inventory':
+  validate_machine(d,v.payload)
   d.inventory=json.dumps(v.payload); d.hostname=str(v.payload.get('hostname',d.hostname)); d.ip=str(v.payload.get('primary_ip',d.ip)); d.serial=str(v.payload.get('bios_serial',d.serial))
   if 'store_code' in v.payload: set_store_code(s,d,v.payload['store_code'])
  elif v.kind!='heartbeat':

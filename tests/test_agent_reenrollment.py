@@ -43,14 +43,16 @@ def test_agent_recovers_401_without_restarting_or_changing_identity(monkeypatch,
   sleeps.append(seconds)
   if len(sleeps)==1:
    saved=json.loads((tmp_path/'identity.json').read_text())
-   assert saved=={'uuid':original['uuid'],'claim':original['claim']}
+   assert saved['uuid']==original['uuid'] and saved['claim']==original['claim'] and 'credential' not in saved
+   assert saved['machine_id']
    clock[0]=10
   else:raise KeyboardInterrupt
  monkeypatch.setattr(agent.time,'sleep',sleep)
  monkeypatch.setattr('sys.argv',['agent','--config',str(config),'--state',str(tmp_path)])
  with pytest.raises(KeyboardInterrupt):agent.run()
  saved=json.loads((tmp_path/'identity.json').read_text())
- assert saved=={**original,'credential':'new-token'}
+ assert all(saved[k]==v for k,v in {**original,'credential':'new-token'}.items())
+ assert saved['machine_id']
  assert len(enrollments)==2 and all(e['uuid']==original['uuid'] and e['inventory']['store_code']=='00115' for e in enrollments)
  assert all(r['headers']['Authorization']=='Bearer new-token' for r in reports[1:])
  assert not list(tmp_path.glob('*.tmp'))
