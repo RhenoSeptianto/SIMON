@@ -180,3 +180,11 @@ Kegagalan setelah transisi memulihkan schema/data SQLite, action task, source/en
 Validasi final: 69 pytest lulus (auth/CSRF, queue tunggal, stage fail, restore schema/data, rollback fail, recovery/power loss, Git archive/check tanpa mengubah checkout, baseline immutable, path database/environment terpisah, health SHA/database match). Smoke menggunakan aplikasi SIMON asli, Git repo/archives, HTTPS dan database sementara: update sukses mempertahankan akun/session/perangkat; candidate yang lolos preflight fresh DB tetapi merusak existing DB lalu crash dipulihkan ke versi/app/data/schema/session sebelumnya. Browser desktop/mobile/light/dark lulus, termasuk setup notice, cek/start, putus koneksi, rollback, reload otomatis sukses dan menu tersembunyi untuk TS. Semua script baru lolos parser PowerShell; modul Python lolos compile.
 
 Batas verifikasi: registrasi dan kontrol Scheduled Task nyata pada PC kantor belum dijalankan; tes tidak mengubah task/service/database kantor. Pemasangan awal manual: pull lalu setup-updater.bat Run as administrator, Ctrl+F5 dan buka Pembaruan. Setelah versi ini terpasang, versi berikutnya baru dibuat untuk pilot tombol update. SQLite saja; database noncocok/non-SQLite ditolak, bukan dialihkan/direset. Panduan operasi/pemulihan: docs/WEB_UPDATE.md.
+
+## 0.2.1 — Health disk dan identitas versi
+
+Menu **Pembaruan** berganti nama menjadi **UpdateSimon**. Versi web yang benar-benar sedang berjalan ditampilkan di kiri bawah sidebar dan berasal dari file `VERSION` server, termasuk untuk akun TS.
+
+Tabel perangkat di Overview dan Devices sekarang menampilkan Health Disk untuk setiap physical disk yang dilaporkan Hard Disk Sentinel, misalnya Disk 1 dan Disk 2 secara terpisah. Nilai tidak ditebak dari status Windows atau persentase wear: data yang tidak tersedia tetap ditulis Belum tersedia, 0% tetap valid, dan nilai Sentinel terakhir yang sudah tidak fresh diberi keterangan Data terakhir. Perubahan tabel ikut mekanisme refresh sekitar 10 detik yang sudah ada.
+
+Release ini hanya mengubah web/backend dan tidak mengubah protokol agent, format database, helper update, atau paket agent store. Karena itu EXE agent tidak perlu dibangun atau dipasang ulang.

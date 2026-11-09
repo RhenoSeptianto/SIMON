@@ -140,4 +140,4 @@ Urutan rollout: hentikan agent lama; update source server dan restart backend; b
 
 ## Update web dari dashboard (0.2.0)
 
-Pemasangan awal: pull source terbaru lalu jalankan `deployment/server/setup-updater.bat` sebagai Administrator satu kali pada PC server. Setelah itu Super Admin membuka **Pembaruan → Cek update → Update sekarang**. Helper terpisah menyiapkan release/environment, backup dan memulihkan versi/database lama bila pemasangan atau health check gagal. Fitur ini tidak memperbarui EXE agent store. Lihat [panduan update web](docs/WEB_UPDATE.md).
+Pemasangan awal: pull source terbaru lalu jalankan `deployment/server/setup-updater.bat` sebagai Administrator satu kali pada PC server. Setelah itu Super Admin membuka **UpdateSimon → Cek update → Update sekarang**. Helper terpisah menyiapkan release/environment, backup dan memulihkan versi/database lama bila pemasangan atau health check gagal. Fitur ini tidak memperbarui EXE agent store. Lihat [panduan update web](docs/WEB_UPDATE.md).

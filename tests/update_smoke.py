@@ -16,7 +16,7 @@ def g(*args):return command([git,*args],cwd=repo)
 for file in source_files(ROOT):
  target=repo/file.relative_to(ROOT);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(file,target)
 g('init','-b','main');g('config','user.name','SIMON Test');g('config','user.email','test@example.invalid');g('add','.');g('commit','-m','old server');old=g('rev-parse','HEAD')
-(repo/'VERSION').write_text('0.2.1\n');g('commit','-am','good release');good=g('rev-parse','HEAD')
+(repo/'VERSION').write_text('9.9.9-test\n');g('commit','-am','good release');good=g('rev-parse','HEAD')
 with (repo/'backend'/'main.py').open('a',encoding='utf-8') as file:
  file.write('''
 # Deliberate fixture: fresh-DB preflight passes, existing-DB migration fails.
@@ -71,7 +71,7 @@ try:
   Job(config).run({'id':'good','target':good},driver)
   assert read_json(folder/'status.json')['state']=='success';driver.healthy(good);WindowsDriver(config).healthy(good)
   response=client.get('/api/devices');response.raise_for_status();assert response.json()['items'][0]['hostname']=='PRESERVED-PC'
-  assert client.get('/api/system/update/status').json()['version']=='0.2.1'
+  assert client.get('/api/system/update/status').json()['version']=='9.9.9-test'
   good_action=driver.current()
   print('PASS: actual SIMON Git release/HTTPS update succeeds; account/session/device preserved and new web version served.',flush=True)
   Job(config).run({'id':'bad','target':bad},driver)

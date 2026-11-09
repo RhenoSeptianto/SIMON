@@ -11,6 +11,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from backend.localization import localize_metrics
 
 ROOT=Path(__file__).resolve().parents[1]
+APP_VERSION=(ROOT/'VERSION').read_text(encoding='utf-8-sig').strip() if (ROOT/'VERSION').exists() else '0.1.0'
 DATA=Path(os.getenv('SIAMS_DATA',str(ROOT/'data'))); DATA.mkdir(parents=True,exist_ok=True)
 engine=create_engine(os.getenv('DATABASE_URL','sqlite:///'+str(DATA/'siams.db')), **({'connect_args':{'check_same_thread':False}} if not os.getenv('DATABASE_URL') else {}))
 DB=sessionmaker(bind=engine); Base=declarative_base()
@@ -112,13 +113,13 @@ def login(v:Login,request:Request,response:Response,s:Session=Depends(db)):
  if not u or not u.active or not hmac.compare_digest(u.password,password(v.password,u.password.split(':')[0])): raise HTTPException(401,'Login tidak valid')
  token=secrets.token_urlsafe(32); s.add(LoginSession(token=digest(token),user_id=u.id,expires=now()+28800)); s.commit()
  response.set_cookie('siams_session',token,httponly=True,samesite='strict',secure=os.getenv('SIAMS_PRODUCTION')=='1',max_age=28800)
- return {'id':u.id,'name':u.name,'role':u.role}
+ return {'id':u.id,'name':u.name,'role':u.role,'version':APP_VERSION}
 @app.post('/api/logout')
 def logout(request:Request,response:Response,s:Session=Depends(db)):
  if request.headers.get('x-siams-request')!='1': raise HTTPException(403,'Header CSRF diperlukan')
  s.query(LoginSession).filter_by(token=digest(request.cookies.get('siams_session',''))).delete(); s.commit(); response.delete_cookie('siams_session'); return {'ok':True}
 @app.get('/api/me')
-def me(u=Depends(user)): return {'id':u.id,'name':u.name,'role':u.role}
+def me(u=Depends(user)): return {'id':u.id,'name':u.name,'role':u.role,'version':APP_VERSION}
 class ChangePassword(BaseModel):
  current_password:str
  new_password:str=Field(min_length=1)

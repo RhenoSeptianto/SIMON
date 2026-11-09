@@ -11,7 +11,7 @@ Versi awal fitur: **0.2.0**. Khusus **Super Admin**. Sumber update adalah repo `
    ```
 
 2. Buka folder `D:\IT\simon-baru\deployment\server`, klik kanan **setup-updater.bat → Run as administrator**. Server SIMON harus sudah terpasang lewat setup-server.bat. Installer helper akan memulai ulang server sementara untuk verifikasi dan pemasangan snapshot awal.
-3. Setelah muncul pesan helper siap, buka dashboard sebagai Super Admin dan tekan **Ctrl+F5 sekali**. Pilih **Pembaruan**.
+3. Setelah muncul pesan helper siap, buka dashboard sebagai Super Admin dan tekan **Ctrl+F5 sekali**. Pilih **UpdateSimon**. Pada versi 0.2.0 menu ini masih bernama **Pembaruan**.
 4. Klik **Cek update**. Setelah fitur ini baru dipasang, hasil "versi terbaru" adalah normal: versi berikutnya harus di-push ke main dahulu.
 
 Tidak perlu build atau memasang ulang agent untuk memasang fitur update web. Jangan memasang helper pada PC store. Helper menggunakan task Windows `SIMONUpdater`; server tetap menggunakan task `SIMONServer` sebagai SYSTEM. Git harus tersedia saat pemasangan; path Git disimpan supaya dapat dipakai SYSTEM.
@@ -20,7 +20,7 @@ Untuk lokasi data nonstandar, gunakan parameter `-DataPath` pada setup-updater.p
 
 ## Pembaruan berikutnya
 
-1. Login Super Admin → **Pembaruan → Cek update**.
+1. Login Super Admin → **UpdateSimon → Cek update**.
 2. Jika ada update, periksa ringkasan perubahan dan klik **Update sekarang**.
 3. Tunggu hasilnya. Koneksi halaman boleh terputus sementara saat restart; halaman mencoba tersambung kembali. Setelah sukses, halaman memuat ulang otomatis untuk memakai web terbaru.
 4. Jika update gagal, hasilnya menunjukkan apakah versi lama berhasil dipulihkan. Log dapat dibuka lewat **Lihat log**.

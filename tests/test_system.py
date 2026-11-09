@@ -213,3 +213,14 @@ def test_history_period_and_access():
  assert samples[0]['collected_at']<samples[-1]['collected_at']
  assert c.get(f'/api/devices/{did}/history?hours=169').status_code==422
  assert c.get(f'/api/devices/{did}/history?hours=0').status_code==422
+
+
+def test_login_and_me_publish_running_version_for_both_roles():
+ from backend.main import APP_VERSION
+ with DB() as s:
+  s.add_all([User(name='Version Admin',username='versionadmin',password=password('1'),role='super_admin',active=1),User(name='Version TS',username='versionts',password=password('1'),role='ts',active=1)]);s.commit()
+ for username in ('versionadmin','versionts'):
+  c=TestClient(app)
+  response=c.post('/api/login',json={'username':username,'password':'1'})
+  assert response.status_code==200 and response.json()['version']==APP_VERSION
+  assert c.get('/api/me').json()['version']==APP_VERSION
