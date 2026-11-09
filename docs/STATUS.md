@@ -192,3 +192,9 @@ Release ini hanya mengubah web/backend dan tidak mengubah protokol agent, format
 ## 0.2.2 — Prioritas health disk
 
 Health Disk di bawah batas Sentinel (default 80%, mengikuti `SENTINEL_HEALTH_WARNING`) ditandai merah. Perangkat yang memiliki minimal satu disk di bawah batas diprioritaskan ke baris teratas; perangkat kritis diurutkan dari health terendah, sedangkan urutan perangkat lain tetap dipertahankan. Nilai kosong tidak dianggap kritis dan tepat 80% tidak ditandai karena alert berlaku untuk nilai di bawah batas.
+
+## 0.2.3 — Fokus perangkat bermasalah dan progres update
+
+Devices memiliki filter **Perlu perhatian** untuk PC offline, health Sentinel di bawah batas, suhu disk di atas 65 °C, ruang drive tersisa di bawah 10%, atau laporan XML Sentinel yang tidak fresh. Health disk memakai warna hijau mulai 90%, kuning 80–89,9%, dan merah di bawah batas warning. Laporan Sentinel yang basi/bermasalah diberi keterangan langsung pada kolom Health Disk.
+
+UpdateSimon menampilkan spinner ringan, tahapan antrean–persiapan–hentikan server–backup–pemasangan–verifikasi, serta durasi berjalan berdasarkan waktu mulai yang disimpan helper. Tampilan ini hanya memakai polling status tiga detik yang sudah ada dan tidak menambah pemeriksaan Git atau agent.

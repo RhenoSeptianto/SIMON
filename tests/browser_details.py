@@ -32,6 +32,7 @@ try:
   pc_row=page.locator('[data-device="'+str(did)+'"]').locator('xpath=ancestor::tr')
   expect(pc_row.locator('.disk-health-item')).to_have_count(2)
   expect(pc_row.locator('.disk-health-item').nth(0)).to_contain_text('95%')
+  expect(pc_row.locator('.disk-health-item').nth(0)).to_have_class('disk-health-item disk-health-good')
   expect(pc_row.locator('.disk-health-item').nth(1)).to_contain_text('70%')
   expect(pc_row).to_have_class('device-health-critical')
   expect(pc_row.locator('.disk-health-item').nth(1)).to_have_class('disk-health-item disk-health-critical')
@@ -41,7 +42,13 @@ try:
   assert 'disk-health-critical' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:79.9}]})")
   assert 'disk-health-critical' not in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:80}]})")
   assert '100%' not in page.evaluate("diskHealthCell({disks:[{source:'windows',health_percent:100,wear_percent:0}]})")
-  assert 'Data terakhir' in page.evaluate("diskHealthCell({sentinel_status:'stale',disks:[{source:'sentinel',health_percent:95}]})")
+  assert 'disk-health-warning' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:85}]})")
+  assert 'Data Sentinel tidak diperbarui' in page.evaluate("diskHealthCell({storage_source:'sentinel',sentinel_status:'stale',disks:[{source:'sentinel',health_percent:95}]})")
+  assert page.evaluate("deviceNeedsAttention({online:false,metrics:{}})")
+  assert page.evaluate("deviceNeedsAttention({online:true,metrics:{storage_source:'sentinel',sentinel_status:'stale'}})")
+  assert page.evaluate("deviceNeedsAttention({online:true,metrics:{disks:[{temperature_c:66}]}})")
+  assert page.evaluate("deviceNeedsAttention({online:true,metrics:{volumes:[{free_percent:9}]}})")
+  assert not page.evaluate("deviceNeedsAttention({online:true,metrics:{storage_source:'sentinel',sentinel_status:'fresh',disks:[{source:'sentinel',health_percent:90,temperature_c:40}],volumes:[{free_percent:20}]}})")
   # Newly enrolled PCs appear without navigation/reload, even while schedule keeps focus.
   with DB() as s:
    for index in range(9):s.add(Device(uuid=str(uuid.uuid4()),hostname='AUTO-OLD-'+str(index),store_code='AUTO-'+str(index),ip='10.9.0.'+str(index),serial='AUTO-'+str(index),claim='unused',status='approved',last_seen=time.time()))
@@ -59,6 +66,10 @@ try:
   response.raise_for_status()
   expect(page.get_by_text('AUTO-LIVE-PC',exact=True)).to_be_visible(timeout=15000)
   expect(search).to_have_value('AUTO-LIVE');expect(search).to_be_focused()
+  search.fill('');page.get_by_label('Filter kondisi perangkat').select_option('1')
+  expect(page.get_by_text('QA-PC',exact=True)).to_be_visible()
+  expect(page.get_by_text('AUTO-LIVE-PC',exact=True)).to_have_count(0)
+  page.get_by_label('Filter kondisi perangkat').select_option('')
   with DB() as s:s.query(Device).filter(Device.id!=did).delete(synchronize_session=False);s.commit()
   print('PASS: newly enrolled agents appear automatically on Overview/Devices; newest PC shown beyond first 8; schedule/search focus retained.')
   page.get_by_role('button',name='Overview',exact=True).click()
@@ -102,6 +113,8 @@ try:
    page.set_viewport_size({'width':1280,'height':900})
   # Exercise the updater UI with a simulated helper, including a restart/disconnect and rollback.
   update_state={'ready':True,'version':'0.2.0','current':'a'*40,'check':{},'job':{'state':'idle','message':'Siap diperiksa'},'busy':False,'maintenance':False}
+  progress_markup=page.evaluate("updateCard({ready:true,version:'0.2.2',current:'a'.repeat(40),check:{},job:{state:'installing',message:'Memasang',started_at:Date.now()/1000-12,updated_at:Date.now()/1000},busy:true,maintenance:false})")
+  assert 'Update sedang berjalan' in progress_markup and 'Berjalan' in progress_markup and 'Pemasangan' in progress_markup
   disconnect=[False];update_success=[False]
   def updater_status(route):
    if disconnect[0]:

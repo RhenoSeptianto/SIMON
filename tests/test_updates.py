@@ -92,6 +92,8 @@ def test_update_endpoints_require_super_admin_and_csrf_and_queue_once(tmp_path,m
  calls=[]
  monkeypatch.setattr(updates.subprocess,'run',lambda args,**kw:(calls.append(args) or SimpleNamespace(returncode=0,stdout='',stderr='')))
  assert c.post('/api/system/update/start',headers={'X-SIAMS-Request':'1'},json={'target':'b'*40}).status_code==200
+ queued=read_json(base/'status.json')
+ assert queued['state']=='queued' and queued['started_at']<=queued['updated_at']
  assert calls==[['schtasks.exe','/Run','/TN','SIMONUpdater']]
  assert c.post('/api/system/update/start',headers={'X-SIAMS-Request':'1'},json={'target':'b'*40}).status_code==409
  write_json(base/'maintenance.json',{})

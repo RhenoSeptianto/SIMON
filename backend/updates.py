@@ -37,7 +37,8 @@ def start(data,database,target,actor,runner=None):
   with path.open('x',encoding='utf-8') as output:json.dump(request,output)
  except FileExistsError:raise UpdateError('Sudah ada update dalam antrean atau sedang berjalan.')
  try:
-  write_json(base/'status.json',{'state':'queued','message':'Update masuk antrean helper. Server akan restart sementara.','job_id':request['id'],'target':target,'updated_at':time.time()})
+  started=time.time()
+  write_json(base/'status.json',{'state':'queued','message':'Update masuk antrean helper. Server akan restart sementara.','job_id':request['id'],'target':target,'started_at':started,'updated_at':started})
   if runner:runner()
   else:
    result=subprocess.run(['schtasks.exe','/Run','/TN','SIMONUpdater'],capture_output=True,text=True,timeout=20,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
