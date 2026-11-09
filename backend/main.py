@@ -352,7 +352,9 @@ def ack(id:int,u=Depends(user),s:Session=Depends(db)):
  device(s,a.device_id,u); a.status='acknowledged'; audit(s,u.id,'ack_alert',id); s.commit(); return {'ok':True}
 @app.get('/api/summary')
 def summary(u=Depends(user),s:Session=Depends(db)):
- ds=[serialize(d) for d in visible(s,u)]; return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(not s.query(UserDeviceAccess).filter_by(device_id=d['id']).first() for d in ds)}
+ ds=[serialize(d) for d in visible(s,u)];ids=[d['id'] for d in ds]
+ active_alerts=s.query(Alert).filter(Alert.device_id.in_(ids),Alert.status!='resolved').count() if ids else 0
+ return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(not s.query(UserDeviceAccess).filter_by(device_id=d['id']).first() for d in ds),'active_alerts':active_alerts}
 @app.get('/api/reports/{format}')
 def export(format:str,u=Depends(user),s:Session=Depends(db)):
  if format!='xlsx':raise HTTPException(404,'Laporan hanya tersedia dalam format Excel (.xlsx)')

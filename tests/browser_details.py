@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright,expect
 import httpx
 with DB() as s:
  s.add_all([User(name='QA Admin',username='qaadmin',password=password('1'),role='super_admin'),User(name='QA TS',username='qats',password=password('1'),role='ts')])
- d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44,'sentinel_tip':'No actions needed.','power_state':'Inactive (without monitoring) (since 11/6/2026 3:58:38 PM)','estimated_remaining_lifetime':'more than 414 days','sentinel_description':'The status of the solid state disk is PERFECT. Problematic or weak sectors were not found.'},{'model':'QA HDD','serial_number':'QA-HDD-2','source':'sentinel','health_percent':70,'performance_percent':100,'temperature_c':35}]}))
+ d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'},{'drive_letter':'D:','free_percent':15},{'drive_letter':'E:','free_percent':5}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44,'sentinel_tip':'No actions needed.','power_state':'Inactive (without monitoring) (since 11/6/2026 3:58:38 PM)','estimated_remaining_lifetime':'more than 414 days','sentinel_description':'The status of the solid state disk is PERFECT. Problematic or weak sectors were not found.'},{'model':'QA HDD','serial_number':'QA-HDD-2','source':'sentinel','health_percent':70,'performance_percent':100,'temperature_c':68}]}))
  s.add(d);s.flush();did=d.id
  for index in range(4):s.add(Sample(device_id=did,event_id=str(uuid.uuid4()),collected=time.time()-7200+index*300,payload=json.dumps({'cpu_usage':20+index,'ram_percent':50+index})))
  s.commit()
@@ -36,6 +36,9 @@ try:
   expect(pc_row.locator('.disk-health-item').nth(1)).to_contain_text('70%')
   expect(pc_row).to_have_class('device-health-critical')
   expect(pc_row.locator('.disk-health-item').nth(1)).to_have_class('disk-health-item disk-health-critical')
+  expect(pc_row.locator('.disk-temperature-high')).to_have_text('Suhu 68 °C')
+  expect(pc_row.locator('.storage-remaining-warning')).to_contain_text('D:15%')
+  expect(pc_row.locator('.storage-remaining-critical')).to_contain_text('E:5%')
   expect(page.locator('#overviewDevices tbody tr').first.locator('[data-device]')).to_have_attribute('data-device',str(did))
   assert 'Belum tersedia' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:null}]})")
   assert '0%' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:0}]})")
@@ -44,6 +47,8 @@ try:
   assert '100%' not in page.evaluate("diskHealthCell({disks:[{source:'windows',health_percent:100,wear_percent:0}]})")
   assert 'disk-health-warning' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:85}]})")
   assert 'Data Sentinel tidak diperbarui' in page.evaluate("diskHealthCell({storage_source:'sentinel',sentinel_status:'stale',disks:[{source:'sentinel',health_percent:95}]})")
+  assert 'storage-remaining-warning' in page.evaluate("storageCell({volumes:[{drive_letter:'D:',free_percent:15}]})")
+  assert 'storage-remaining-critical' in page.evaluate("storageCell({volumes:[{drive_letter:'E:',free_percent:5}]})")
   assert page.evaluate("deviceNeedsAttention({online:false,metrics:{}})")
   assert page.evaluate("deviceNeedsAttention({online:true,metrics:{storage_source:'sentinel',sentinel_status:'stale'}})")
   assert page.evaluate("deviceNeedsAttention({online:true,metrics:{disks:[{temperature_c:66}]}})")
@@ -133,8 +138,10 @@ try:
   page.route('**/api/system/update/check',updater_check)
   page.route('**/api/system/update/start',updater_start)
   page.get_by_role('button',name='UpdateSimon',exact=True).click()
+  expect(page.locator('.nav-update-available')).to_be_hidden()
   expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_enabled()
   page.get_by_role('button',name='Cek update',exact=True).click()
+  expect(page.locator('.nav-update-available')).to_be_visible()
   expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_enabled()
   page.get_by_role('button',name='Update sekarang',exact=True).click()
   expect(page.get_by_text('Update gagal, versi sebelumnya berhasil dipulihkan.',exact=True)).to_be_visible(timeout=12000)
@@ -145,6 +152,7 @@ try:
    page.get_by_role('button',name='Update sekarang',exact=True).click()
   expect(page.get_by_text('Update berhasil. Server sudah siap digunakan.',exact=True)).to_be_visible(timeout=10000)
   expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_disabled()
+  expect(page.locator('.nav-update-available')).to_be_hidden()
   page.screenshot(path=str(target/'updater-success.png'),full_page=True)
 
   page.unroute('**/api/system/update/status',updater_status)
@@ -155,6 +163,7 @@ try:
    from backend.main import Alert
    s.add(Alert(device_id=did,category='disk_free',message='QA storage alert'));s.commit()
   page.get_by_role('button',name='Alerts',exact=True).click()
+  expect(page.locator('.nav-alert-count')).to_have_text('1')
   expect(page.get_by_text('QA storage alert')).to_be_visible()
   page.get_by_role('button',name='Acknowledge',exact=True).click()
   expect(page.get_by_text('Ditinjau',exact=True)).to_be_visible()

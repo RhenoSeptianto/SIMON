@@ -198,3 +198,9 @@ Health Disk di bawah batas Sentinel (default 80%, mengikuti `SENTINEL_HEALTH_WAR
 Devices memiliki filter **Perlu perhatian** untuk PC offline, health Sentinel di bawah batas, suhu disk di atas 65 °C, ruang drive tersisa di bawah 10%, atau laporan XML Sentinel yang tidak fresh. Health disk memakai warna hijau mulai 90%, kuning 80–89,9%, dan merah di bawah batas warning. Laporan Sentinel yang basi/bermasalah diberi keterangan langsung pada kolom Health Disk.
 
 UpdateSimon menampilkan spinner ringan, tahapan antrean–persiapan–hentikan server–backup–pemasangan–verifikasi, serta durasi berjalan berdasarkan waktu mulai yang disimpan helper. Tampilan ini hanya memakai polling status tiga detik yang sudah ada dan tidak menambah pemeriksaan Git atau agent.
+
+## 0.2.4 — Indikator masalah ringkas
+
+Menu Alerts menampilkan badge jumlah masalah yang belum selesai sesuai cakupan perangkat akun. Tabel Overview dan Devices menampilkan persentase ruang tersisa per drive: hijau mulai 20%, kuning 10–19,9%, dan merah di bawah 10%. Suhu disk hanya ditambahkan ke kolom Health Disk saat melewati 65 °C agar tabel tetap ringkas.
+
+Menu UpdateSimon menampilkan titik kuning jika hasil **Cek update** terakhir menemukan versi baru. Indikator hanya membaca status lokal helper setiap 30 detik atau setelah aksi update; tidak melakukan fetch GitHub otomatis.
