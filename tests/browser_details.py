@@ -33,8 +33,13 @@ try:
   expect(pc_row.locator('.disk-health-item')).to_have_count(2)
   expect(pc_row.locator('.disk-health-item').nth(0)).to_contain_text('95%')
   expect(pc_row.locator('.disk-health-item').nth(1)).to_contain_text('70%')
+  expect(pc_row).to_have_class('device-health-critical')
+  expect(pc_row.locator('.disk-health-item').nth(1)).to_have_class('disk-health-item disk-health-critical')
+  expect(page.locator('#overviewDevices tbody tr').first.locator('[data-device]')).to_have_attribute('data-device',str(did))
   assert 'Belum tersedia' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:null}]})")
   assert '0%' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:0}]})")
+  assert 'disk-health-critical' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:79.9}]})")
+  assert 'disk-health-critical' not in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:80}]})")
   assert '100%' not in page.evaluate("diskHealthCell({disks:[{source:'windows',health_percent:100,wear_percent:0}]})")
   assert 'Data terakhir' in page.evaluate("diskHealthCell({sentinel_status:'stale',disks:[{source:'sentinel',health_percent:95}]})")
   # Newly enrolled PCs appear without navigation/reload, even while schedule keeps focus.
@@ -60,7 +65,7 @@ try:
   with DB() as s:
    live=s.get(Device,did);values=json.loads(live.metrics);values['disks'][1]['health_percent']=69;live.metrics=json.dumps(values);s.commit()
   expect(page.locator('[data-device="'+str(did)+'"]').locator('xpath=ancestor::tr').locator('.disk-health-item').nth(1)).to_contain_text('69%',timeout=15000)
-  print('PASS: separate Sentinel disk health values and live update; missing/zero/legacy/stale data handled; sidebar uses server version.')
+  print('PASS: separate Sentinel disk health values, warning color/order and live update; missing/zero/legacy/stale data handled; sidebar uses server version.')
   target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)
   for theme in ('light','dark'):
    page.evaluate("dark => document.body.classList.toggle('dark', dark)",theme=='dark')

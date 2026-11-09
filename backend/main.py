@@ -113,13 +113,13 @@ def login(v:Login,request:Request,response:Response,s:Session=Depends(db)):
  if not u or not u.active or not hmac.compare_digest(u.password,password(v.password,u.password.split(':')[0])): raise HTTPException(401,'Login tidak valid')
  token=secrets.token_urlsafe(32); s.add(LoginSession(token=digest(token),user_id=u.id,expires=now()+28800)); s.commit()
  response.set_cookie('siams_session',token,httponly=True,samesite='strict',secure=os.getenv('SIAMS_PRODUCTION')=='1',max_age=28800)
- return {'id':u.id,'name':u.name,'role':u.role,'version':APP_VERSION}
+ return {'id':u.id,'name':u.name,'role':u.role,'version':APP_VERSION,'disk_health_warning':float(os.getenv('SENTINEL_HEALTH_WARNING','80'))}
 @app.post('/api/logout')
 def logout(request:Request,response:Response,s:Session=Depends(db)):
  if request.headers.get('x-siams-request')!='1': raise HTTPException(403,'Header CSRF diperlukan')
  s.query(LoginSession).filter_by(token=digest(request.cookies.get('siams_session',''))).delete(); s.commit(); response.delete_cookie('siams_session'); return {'ok':True}
 @app.get('/api/me')
-def me(u=Depends(user)): return {'id':u.id,'name':u.name,'role':u.role,'version':APP_VERSION}
+def me(u=Depends(user)): return {'id':u.id,'name':u.name,'role':u.role,'version':APP_VERSION,'disk_health_warning':float(os.getenv('SENTINEL_HEALTH_WARNING','80'))}
 class ChangePassword(BaseModel):
  current_password:str
  new_password:str=Field(min_length=1)

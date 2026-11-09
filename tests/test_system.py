@@ -223,4 +223,6 @@ def test_login_and_me_publish_running_version_for_both_roles():
   c=TestClient(app)
   response=c.post('/api/login',json={'username':username,'password':'1'})
   assert response.status_code==200 and response.json()['version']==APP_VERSION
-  assert c.get('/api/me').json()['version']==APP_VERSION
+  assert response.json()['disk_health_warning']==80
+  identity=c.get('/api/me').json()
+  assert identity['version']==APP_VERSION and identity['disk_health_warning']==80

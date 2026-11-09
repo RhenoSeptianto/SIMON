@@ -188,3 +188,7 @@ Menu **Pembaruan** berganti nama menjadi **UpdateSimon**. Versi web yang benar-b
 Tabel perangkat di Overview dan Devices sekarang menampilkan Health Disk untuk setiap physical disk yang dilaporkan Hard Disk Sentinel, misalnya Disk 1 dan Disk 2 secara terpisah. Nilai tidak ditebak dari status Windows atau persentase wear: data yang tidak tersedia tetap ditulis Belum tersedia, 0% tetap valid, dan nilai Sentinel terakhir yang sudah tidak fresh diberi keterangan Data terakhir. Perubahan tabel ikut mekanisme refresh sekitar 10 detik yang sudah ada.
 
 Release ini hanya mengubah web/backend dan tidak mengubah protokol agent, format database, helper update, atau paket agent store. Karena itu EXE agent tidak perlu dibangun atau dipasang ulang.
+
+## 0.2.2 — Prioritas health disk
+
+Health Disk di bawah batas Sentinel (default 80%, mengikuti `SENTINEL_HEALTH_WARNING`) ditandai merah. Perangkat yang memiliki minimal satu disk di bawah batas diprioritaskan ke baris teratas; perangkat kritis diurutkan dari health terendah, sedangkan urutan perangkat lain tetap dipertahankan. Nilai kosong tidak dianggap kritis dan tepat 80% tidak ditandai karena alert berlaku untuk nilai di bawah batas.
