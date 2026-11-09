@@ -137,3 +137,7 @@ Build terbaru wajib manifest 9/machine_bound_identity. UUID/claim disimpan bersa
 Server menolak enrollment/inventory yang memakai UUID lama tetapi Machine ID atau serial BIOS valid berbeda, sehingga hostname/serial/kode perangkat asal tidak tertimpa. Rename hostname pada hardware yang sama tetap diperbolehkan. Perangkat lama yang masih berjalan dengan credential tersalin perlu dihentikan dan diperbarui; reset database saja tidak memperbaiki file identitas tersalin dan agent aktif bisa langsung mendaftar kembali. Sebarkan ZIP bersih hasil server, bukan folder instalasi yang sudah berisi data.
 
 Urutan rollout: hentikan agent lama; update source server dan restart backend; build EXE baru lalu buat paket dari CA server kantor; instal paket baru di tiap PC dengan kode store masing-masing; uji dua perangkat muncul bersamaan sebelum penyebaran luas. Semua config/data/log tetap di drive D.
+
+## Helper update web satu kali
+
+Versi 0.2.0 menambahkan menu Pembaruan untuk Super Admin. Setelah pull source, jalankan deployment/server/setup-updater.bat sebagai Administrator. Helper membuat snapshot aplikasi awal dan task SIMONUpdater; server tetap task SIMONServer. Update berikutnya memakai tombol dashboard, dengan backup/migrasi/pemeriksaan HTTPS dan rollback aplikasi/database. Agent store tidak diganti. Panduan lengkap: [WEB_UPDATE.md](WEB_UPDATE.md).

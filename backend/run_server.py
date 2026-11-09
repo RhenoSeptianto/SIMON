@@ -1,4 +1,4 @@
-﻿"""Office HTTPS server runner, used by Windows Task Scheduler."""
+"""Office HTTPS server runner, used by Windows Task Scheduler."""
 import os,logging
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
@@ -6,6 +6,11 @@ ROOT=Path(__file__).resolve().parents[1]
 os.environ['SIAMS_PRODUCTION']='1'
 
 def main():
+ import argparse
+ parser=argparse.ArgumentParser();parser.add_argument('--data');parser.add_argument('--version');parser.add_argument('--database');args=parser.parse_args()
+ if args.data:os.environ['SIAMS_DATA']=str(Path(args.data).resolve())
+ if args.version:os.environ['SIAMS_BUILD_SHA']=args.version
+ if args.database:os.environ['DATABASE_URL']='sqlite:///'+str(Path(args.database).resolve())
  import uvicorn
  data=Path(os.getenv('SIAMS_DATA',str(ROOT/'data')))
  tls=data/'tls'

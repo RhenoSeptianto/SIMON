@@ -392,6 +392,56 @@ def reset_database(v:ResetDatabase,u=Depends(super_admin),s:Session=Depends(db))
  audit(s,u.id,'reset_database',target.name); s.commit()
  return {'ok':True,'backup':target.name,'message':'Data monitoring direset. Akun dan audit tetap tersimpan.'}
 
+# The maintenance gate blocks data mutations during schema changes/rollback.
+@app.middleware('http')
+async def maintenance_gate(request,call_next):
+ if (DATA/'updater'/'maintenance.json').exists() and request.url.path.startswith('/api/') and request.url.path not in ('/api/health','/api/me','/api/system/update/status'):
+  from fastapi.responses import JSONResponse
+  return JSONResponse({'detail':'SIMON sedang diperbarui. Coba lagi setelah selesai.'},status_code=503,headers={'Retry-After':'5'})
+ return await call_next(request)
+
+@app.get('/api/health')
+def system_health(s:Session=Depends(db)):
+ for model in (User,Device,Sample,LoginSession,Alert,UserDeviceAccess,Audit):s.query(model).limit(1).all()
+ database_id=hashlib.sha256(os.path.normcase(str(Path(engine.url.database).resolve())).encode()).hexdigest() if engine.dialect.name=='sqlite' and engine.url.database not in (None,':memory:') else None
+ return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'database_kind':engine.dialect.name,'database_id':database_id}
+
+def updater_database():
+ if engine.dialect.name!='sqlite':raise HTTPException(409,'Update otomatis saat ini mendukung database SQLite saja.')
+ return str(Path(engine.url.database).resolve())
+
+@app.get('/api/system/update/status')
+def update_status(u=Depends(super_admin)):
+ from backend.updates import status
+ return status(DATA,ROOT)
+
+@app.post('/api/system/update/check')
+def update_check(u=Depends(super_admin)):
+ from backend.updates import check,UpdateError
+ try:return check(DATA,updater_database())
+ except Exception as error:raise HTTPException(409,str(error))
+
+class UpdateRequest(BaseModel):
+ target:str=Field(pattern='^[0-9a-f]{40}$')
+
+@app.post('/api/system/update/start')
+def update_start(v:UpdateRequest,u=Depends(super_admin),s:Session=Depends(db)):
+ from backend.updates import start,UpdateError
+ # Audit before maintenance can begin; the database backup includes this request.
+ audit(s,u.id,'request_application_update',v.target);s.commit()
+ try:
+  result=start(DATA,updater_database(),v.target,u.id)
+  return {'job_id':result['id'],'message':'Update diproses oleh helper.'}
+ except UpdateError as error:raise HTTPException(409,str(error))
+
+@app.get('/api/system/update/log')
+def update_log(u=Depends(super_admin)):
+ path=DATA/'updater'/'update.log'
+ if not path.exists():return {'log':'Belum ada log update.'}
+ with path.open('rb') as source:
+  source.seek(max(0,path.stat().st_size-24000));data=source.read()
+ return {'log':data.decode('utf-8',errors='replace')}
+
 app.mount('/static',StaticFiles(directory=ROOT/'frontend'),name='static')
 @app.get('/')
 def index(): return FileResponse(ROOT/'frontend'/'index.html')

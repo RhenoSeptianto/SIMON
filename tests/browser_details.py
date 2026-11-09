@@ -48,9 +48,13 @@ try:
   target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)
   for theme in ('light','dark'):
    page.evaluate("dark => document.body.classList.toggle('dark', dark)",theme=='dark')
-   for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database'):
-    page.get_by_role('button',name='Laporan' if section=='Reports' else section,exact=True).click()
-    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else section)
+   for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database','Updates'):
+    page.get_by_role('button',name='Laporan' if section=='Reports' else 'Pembaruan' if section=='Updates' else section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else 'Pembaruan' if section=='Updates' else section)
+    if section=='Updates':
+     expect(page.get_by_role('heading',name='Update aplikasi SIMON')).to_be_visible()
+     expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_disabled()
+     expect(page.get_by_text('Pemasangan awal diperlukan satu kali')).to_be_visible()
     if section=='Reports':
      expect(page.get_by_role('link',name='Unduh Excel')).to_be_visible()
      expect(page.locator('a[href="/api/reports/csv"]')).to_have_count(0)
@@ -66,15 +70,53 @@ try:
      assert 'Jalankan agent' not in page.locator('#content').inner_text()
     assert page.locator('main').evaluate('(e)=>e.getBoundingClientRect().bottom>=window.innerHeight-1')
     assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1')
-    if section in ('Alerts','Overview','Users'):
+    if section in ('Alerts','Overview','Users','Updates'):
      page.screenshot(path=str(target/f'{section.lower()}-{theme}.png'),full_page=True)
    page.set_viewport_size({'width':390,'height':844})
-   for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database'):
-    page.get_by_role('button',name='Laporan' if section=='Reports' else section,exact=True).click()
-    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else section)
+   for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database','Updates'):
+    page.get_by_role('button',name='Laporan' if section=='Reports' else 'Pembaruan' if section=='Updates' else section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else 'Pembaruan' if section=='Updates' else section)
     assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),section
    page.screenshot(path=str(target/f'dashboard-mobile-{theme}.png'),full_page=True)
    page.set_viewport_size({'width':1280,'height':900})
+  # Exercise the updater UI with a simulated helper, including a restart/disconnect and rollback.
+  update_state={'ready':True,'version':'0.2.0','current':'a'*40,'check':{},'job':{'state':'idle','message':'Siap diperiksa'},'busy':False,'maintenance':False}
+  disconnect=[False];update_success=[False]
+  def updater_status(route):
+   if disconnect[0]:
+    disconnect[0]=False;route.abort();return
+   route.fulfill(json=update_state)
+  def updater_check(route):
+   update_state['check']={'available':True,'latest':'b'*40,'latest_version':'0.3.0','changes':['b123456 Update tampilan']}
+   route.fulfill(json=update_state['check'])
+  def updater_start(route):
+   assert route.request.post_data_json['target']=='b'*40
+   disconnect[0]=True
+   if update_success[0]:update_state.update(current='b'*40,version='0.3.0',busy=False,maintenance=False,job={'state':'success','message':'Update berhasil. Server sudah siap digunakan.'})
+   else:update_state.update(busy=False,maintenance=False,job={'state':'rolled_back','message':'Update gagal, versi sebelumnya berhasil dipulihkan.','error':'Uji health check gagal'})
+   route.fulfill(json={'job_id':'test-job'})
+  page.route('**/api/system/update/status',updater_status)
+  page.route('**/api/system/update/check',updater_check)
+  page.route('**/api/system/update/start',updater_start)
+  page.get_by_role('button',name='Pembaruan',exact=True).click()
+  expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_enabled()
+  page.get_by_role('button',name='Cek update',exact=True).click()
+  expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_enabled()
+  page.get_by_role('button',name='Update sekarang',exact=True).click()
+  expect(page.get_by_text('Update gagal, versi sebelumnya berhasil dipulihkan.',exact=True)).to_be_visible(timeout=12000)
+  expect(page.get_by_text('Versi lama dipulihkan',exact=True)).to_be_visible()
+  page.screenshot(path=str(target/'updater-rollback.png'),full_page=True)
+  update_success[0]=True
+  with page.expect_navigation(timeout=15000,wait_until='domcontentloaded'):
+   page.get_by_role('button',name='Update sekarang',exact=True).click()
+  expect(page.get_by_text('Update berhasil. Server sudah siap digunakan.',exact=True)).to_be_visible(timeout=10000)
+  expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_disabled()
+  page.screenshot(path=str(target/'updater-success.png'),full_page=True)
+
+  page.unroute('**/api/system/update/status',updater_status)
+  page.unroute('**/api/system/update/check',updater_check)
+  page.unroute('**/api/system/update/start',updater_start)
+  print('PASS: updater setup notice, check/update controls, disconnect recovery, rollback and automatic reload after success; no real deployment triggered.')
   with DB() as s:
    from backend.main import Alert
    s.add(Alert(device_id=did,category='disk_free',message='QA storage alert'));s.commit()
@@ -125,6 +167,7 @@ try:
   expect(page.locator('#overviewCount')).to_have_text('2 perangkat')
   page.get_by_role('button',name='Keluar',exact=True).click()
   page.locator('[name=username]').fill('qats');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
+  expect(page.get_by_role('button',name='Pembaruan',exact=True)).to_have_count(0)
   expect(page.get_by_role('note',name='Cakupan perangkat')).to_contain_text('Perangkat yang diassign ke QA TS')
   expect(page.locator('#overviewCount')).to_have_text('1 perangkat')
   expect(page.get_by_text('QA-OTHER-TS-PC',exact=True)).to_have_count(0)

@@ -137,3 +137,7 @@ Build terbaru wajib manifest 9/machine_bound_identity. UUID/claim disimpan bersa
 Server menolak enrollment/inventory yang memakai UUID lama tetapi Machine ID atau serial BIOS valid berbeda, sehingga hostname/serial/kode perangkat asal tidak tertimpa. Rename hostname pada hardware yang sama tetap diperbolehkan. Perangkat lama yang masih berjalan dengan credential tersalin perlu dihentikan dan diperbarui; reset database saja tidak memperbaiki file identitas tersalin dan agent aktif bisa langsung mendaftar kembali. Sebarkan ZIP bersih hasil server, bukan folder instalasi yang sudah berisi data.
 
 Urutan rollout: hentikan agent lama; update source server dan restart backend; build EXE baru lalu buat paket dari CA server kantor; instal paket baru di tiap PC dengan kode store masing-masing; uji dua perangkat muncul bersamaan sebelum penyebaran luas. Semua config/data/log tetap di drive D.
+
+## Update web dari dashboard (0.2.0)
+
+Pemasangan awal: pull source terbaru lalu jalankan `deployment/server/setup-updater.bat` sebagai Administrator satu kali pada PC server. Setelah itu Super Admin membuka **Pembaruan → Cek update → Update sekarang**. Helper terpisah menyiapkan release/environment, backup dan memulihkan versi/database lama bila pemasangan atau health check gagal. Fitur ini tidak memperbarui EXE agent store. Lihat [panduan update web](docs/WEB_UPDATE.md).
