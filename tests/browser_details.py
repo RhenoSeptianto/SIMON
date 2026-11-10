@@ -25,6 +25,8 @@ try:
   page=browser.new_page(viewport={'width':1280,'height':900})
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto('http://127.0.0.1:8769/')
+  expect(page.locator('link[rel="icon"]')).to_have_attribute('href','/static/favicon.svg?v=1')
+  assert httpx.get('http://127.0.0.1:8769/static/favicon.svg').status_code==200
   page.locator('[name=username]').fill('qaadmin');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
   expect(page.locator('#sidebarVersion')).to_have_text('SIMON v'+(ROOT/'VERSION').read_text().strip())
   expect(page.get_by_role('button',name='UpdateSimon',exact=True)).to_be_visible()
@@ -37,8 +39,6 @@ try:
   expect(pc_row).to_have_class('device-health-critical')
   expect(pc_row.locator('.disk-health-item').nth(1)).to_have_class('disk-health-item disk-health-critical')
   expect(pc_row.locator('.disk-temperature-high')).to_have_text('Suhu 68 °C')
-  expect(pc_row.locator('.storage-remaining-warning')).to_contain_text('D:15%')
-  expect(pc_row.locator('.storage-remaining-critical')).to_contain_text('E:5%')
   expect(page.locator('#overviewDevices tbody tr').first.locator('[data-device]')).to_have_attribute('data-device',str(did))
   assert 'Belum tersedia' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:null}]})")
   assert '0%' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:0}]})")
@@ -47,8 +47,6 @@ try:
   assert '100%' not in page.evaluate("diskHealthCell({disks:[{source:'windows',health_percent:100,wear_percent:0}]})")
   assert 'disk-health-warning' in page.evaluate("diskHealthCell({disks:[{source:'sentinel',health_percent:85}]})")
   assert 'Data Sentinel tidak diperbarui' in page.evaluate("diskHealthCell({storage_source:'sentinel',sentinel_status:'stale',disks:[{source:'sentinel',health_percent:95}]})")
-  assert 'storage-remaining-warning' in page.evaluate("storageCell({volumes:[{drive_letter:'D:',free_percent:15}]})")
-  assert 'storage-remaining-critical' in page.evaluate("storageCell({volumes:[{drive_letter:'E:',free_percent:5}]})")
   assert page.evaluate("deviceNeedsAttention({online:false,metrics:{}})")
   assert page.evaluate("deviceNeedsAttention({online:true,metrics:{storage_source:'sentinel',sentinel_status:'stale'}})")
   assert page.evaluate("deviceNeedsAttention({online:true,metrics:{disks:[{temperature_c:66}]}})")
@@ -162,8 +160,10 @@ try:
   with DB() as s:
    from backend.main import Alert
    s.add(Alert(device_id=did,category='disk_free',message='QA storage alert'));s.commit()
-  page.get_by_role('button',name='Alerts',exact=True).click()
+  page.evaluate("refreshNavIndicators()")
   expect(page.locator('.nav-alert-count')).to_have_text('1')
+  page.get_by_role('button',name='Alerts',exact=True).click()
+  expect(page.locator('.nav-alert-count')).to_be_hidden()
   expect(page.get_by_text('QA storage alert')).to_be_visible()
   page.get_by_role('button',name='Acknowledge',exact=True).click()
   expect(page.get_by_text('Ditinjau',exact=True)).to_be_visible()

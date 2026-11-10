@@ -4,7 +4,7 @@ import zipfile
 ROOT=Path(__file__).resolve().parents[1]
 DIRECTORIES=('agent','backend','frontend','docs','tests','tools','deployment','.github')
 TOP_FILES=('VERSION','.gitignore','README.md','requirements.txt','requirements-dev.txt','setup.ps1','start.ps1')
-SUFFIXES={'.py','.ps1','.bat','.md','.txt','.html','.css','.js','.yml','.yaml'}
+SUFFIXES={'.py','.ps1','.bat','.md','.txt','.html','.css','.js','.svg','.yml','.yaml'}
 
 def source_files(root=ROOT):
  root=Path(root).resolve()

@@ -30,7 +30,9 @@ def test_full_flow_and_permissions():
  for name,access in [('support',[d]),('outsider',[])]:
   assert client.post('/api/users',json={'name':name,'username':name,'password':'secure-pass-123','role':'ts','devices':access},headers=H).status_code==200
  assert len(client.get('/api/alerts').json())==1
- assert client.get('/api/summary').json()['active_alerts']==1
+ summary=client.get('/api/summary').json()
+ assert summary['active_alerts']==1 and summary['new_alerts']==1 and summary['latest_alert_id']>0
+ assert client.get('/api/summary?after_alert_id='+str(summary['latest_alert_id'])).json()['new_alerts']==0
  assert client.get('/api/reports/xlsx').content.startswith(b'PK')
  support=TestClient(app); support.post('/api/login',json={'username':'support','password':'secure-pass-123'})
  outsider=TestClient(app); outsider.post('/api/login',json={'username':'outsider','password':'secure-pass-123'})

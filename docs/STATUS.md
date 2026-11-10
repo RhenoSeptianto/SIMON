@@ -204,3 +204,9 @@ UpdateSimon menampilkan spinner ringan, tahapan antrean–persiapan–hentikan s
 Menu Alerts menampilkan badge jumlah masalah yang belum selesai sesuai cakupan perangkat akun. Tabel Overview dan Devices menampilkan persentase ruang tersisa per drive: hijau mulai 20%, kuning 10–19,9%, dan merah di bawah 10%. Suhu disk hanya ditambahkan ke kolom Health Disk saat melewati 65 °C agar tabel tetap ringkas.
 
 Menu UpdateSimon menampilkan titik kuning jika hasil **Cek update** terakhir menemukan versi baru. Indikator hanya membaca status lokal helper setiap 30 detik atau setelah aksi update; tidak melakukan fetch GitHub otomatis.
+
+## 0.2.5 — Favicon dan badge alert baru
+
+Kolom Storage tersisa dihapus kembali dari Overview/Devices agar tabel lebih ringkas; kondisi storage tetap tersedia di tab Storage, Alerts, laporan Excel, dan filter Perlu perhatian. Tab browser memakai favicon SIMON berupa monitor dan garis telemetry dengan warna brand.
+
+Badge Alerts sekarang menghitung alert baru sejak halaman Alerts terakhir dibuka untuk setiap akun pada browser tersebut. Saat Alerts dibuka, posisi alert terbaru disimpan di localStorage dan badge langsung hilang; alert baru berikutnya akan memunculkan angka kembali. Status masalah aktif tetap tersimpan dan ditampilkan di halaman Alerts sampai diselesaikan.
