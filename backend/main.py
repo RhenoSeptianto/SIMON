@@ -167,7 +167,11 @@ def edit_user(id:int,v:UserInput,u=Depends(admin),s:Session=Depends(db)):
  audit(s,u.id,'edit_user',id); s.commit(); return {'ok':True}
 @app.get('/api/devices')
 def devices(q:str='',store_id:int|None=None,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
- rows=[serialize(d) for d in visible(s,u) if q.lower() in (d.hostname+' '+(d.ip or '')+' '+d.store_code).lower() and (store_id is None or d.store_id==store_id)]
+ models=[d for d in visible(s,u) if q.lower() in (d.hostname+' '+(d.ip or '')+' '+d.store_code).lower() and (store_id is None or d.store_id==store_id)]
+ assigned={d.id:[] for d in models}
+ if assigned:
+  for access,owner in s.query(UserDeviceAccess,User).join(User,User.id==UserDeviceAccess.user_id).filter(UserDeviceAccess.device_id.in_(assigned.keys()),User.role=='ts').order_by(User.name).all():assigned[access.device_id].append(owner.name)
+ rows=[{**serialize(d),'ts_names':assigned[d.id]} for d in models]
  size=max(1,min(limit_,200)); start=(max(page,1)-1)*size
  return {'total':len(rows),'items':rows[start:start+size]}
 @app.get('/api/devices/{id}')
@@ -446,6 +450,29 @@ def update_log(u=Depends(super_admin)):
  with path.open('rb') as source:
   source.seek(max(0,path.stat().st_size-24000));data=source.read()
  return {'log':data.decode('utf-8',errors='replace')}
+
+def current_update_sha():
+ from backend.updates import status
+ return status(DATA,ROOT).get('current','')
+
+@app.get('/api/system/agent-package/status')
+def agent_package_status(u=Depends(super_admin)):
+ from backend.agent_packages import status
+ return status(DATA,current_update_sha())
+
+@app.post('/api/system/agent-package/prepare')
+def agent_package_prepare(u=Depends(super_admin),s:Session=Depends(db)):
+ from backend.agent_packages import prepare,AgentPackageError
+ try:
+  result=prepare(DATA,ROOT,current_update_sha());audit(s,u.id,'prepare_agent_package',result['source_sha']);s.commit();return result
+ except AgentPackageError as error:raise HTTPException(409,str(error))
+
+@app.get('/api/system/agent-package/download')
+def agent_package_download(u=Depends(super_admin)):
+ from backend.agent_packages import status
+ state=status(DATA,current_update_sha());path=DATA/'agent-package'/'SIMONAgent-store.zip'
+ if not state['ready'] or not path.is_file():raise HTTPException(404,'Paket agent terbaru belum siap. Klik Ambil agent terbaru dahulu.')
+ return FileResponse(path,media_type='application/zip',filename='SIMONAgent-store.zip')
 
 app.mount('/static',StaticFiles(directory=ROOT/'frontend'),name='static')
 @app.get('/')

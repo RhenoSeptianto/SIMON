@@ -74,6 +74,7 @@ def test_boot_recovers_interrupted_schema_change(update_config):
 def test_update_endpoints_require_super_admin_and_csrf_and_queue_once(tmp_path,monkeypatch):
  import backend.main as backend
  import backend.updates as updates
+ import backend.agent_packages as agent_packages
  from types import SimpleNamespace
  data=tmp_path/'data';base=data/'updater';base.mkdir(parents=True)
  monkeypatch.setattr(backend,'DATA',data)
@@ -86,9 +87,22 @@ def test_update_endpoints_require_super_admin_and_csrf_and_queue_once(tmp_path,m
  assert c.get('/api/system/update/status').status_code==401
  c.post('/api/login',json={'username':'updatets','password':'1'})
  for endpoint in ('status','log'):assert c.get('/api/system/update/'+endpoint).status_code==403
+ assert c.get('/api/system/agent-package/status').status_code==403
+ assert c.post('/api/system/agent-package/prepare',headers={'X-SIAMS-Request':'1'}).status_code==403
  assert c.post('/api/system/update/start',headers={'X-SIAMS-Request':'1'},json={'target':'b'*40}).status_code==403
  c.post('/api/login',json={'username':'updateadmin','password':'1'})
  assert c.post('/api/system/update/start',json={'target':'b'*40}).status_code==403
+ assert c.post('/api/system/agent-package/prepare').status_code==403
+ monkeypatch.setattr(backend,'current_update_sha',lambda:'a'*40)
+ def prepare_agent(data,root,sha):
+  package=Path(data)/'agent-package'/'SIMONAgent-store.zip';package.parent.mkdir(parents=True,exist_ok=True);package.write_bytes(b'package')
+  result={'source_sha':sha,'package_sha256':__import__('hashlib').sha256(package.read_bytes()).hexdigest(),'size':package.stat().st_size,'filename':package.name,'error':None}
+  write_json(package.parent/'status.json',result);return {**result,'ready':True,'download':'/api/system/agent-package/download'}
+ monkeypatch.setattr(agent_packages,'prepare',prepare_agent)
+ assert c.get('/api/system/agent-package/status').json()['ready'] is False
+ assert c.post('/api/system/agent-package/prepare',headers={'X-SIAMS-Request':'1'}).json()['ready'] is True
+ download=c.get('/api/system/agent-package/download')
+ assert download.status_code==200 and download.content==b'package'
  calls=[]
  monkeypatch.setattr(updates.subprocess,'run',lambda args,**kw:(calls.append(args) or SimpleNamespace(returncode=0,stdout='',stderr='')))
  assert c.post('/api/system/update/start',headers={'X-SIAMS-Request':'1'},json={'target':'b'*40}).status_code==200

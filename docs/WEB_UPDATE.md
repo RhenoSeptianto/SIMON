@@ -1,6 +1,6 @@
 # Update SIMON dari Dashboard
 
-Versi awal fitur: **0.2.0**. Khusus **Super Admin**. Sumber update adalah repo `RhenoSeptianto/SIMON`, branch `main`. Fitur ini memperbarui web/backend server; EXE agent store tidak diganti otomatis.
+Versi awal fitur: **0.2.0**. Khusus **Super Admin**. Sumber update adalah repo `RhenoSeptianto/SIMON`, branch `main`. Update web/backend tidak memasang EXE ke PC store secara otomatis. Mulai versi **0.2.6**, UpdateSimon juga dapat mengambil build agent resmi dan menyiapkan ZIP yang siap dibagikan secara manual.
 
 ## Pemasangan awal satu kali di server kantor
 
@@ -15,6 +15,15 @@ Versi awal fitur: **0.2.0**. Khusus **Super Admin**. Sumber update adalah repo `
 4. Klik **Cek update**. Setelah fitur ini baru dipasang, hasil "versi terbaru" adalah normal: versi berikutnya harus di-push ke main dahulu.
 
 Tidak perlu build atau memasang ulang agent untuk memasang fitur update web. Jangan memasang helper pada PC store. Helper menggunakan task Windows `SIMONUpdater`; server tetap menggunakan task `SIMONServer` sebagai SYSTEM. Git harus tersedia saat pemasangan; path Git disimpan supaya dapat dipakai SYSTEM.
+
+## Mengambil agent store terbaru
+
+1. Selesaikan update server terlebih dahulu, lalu buka **UpdateSimon** sebagai Super Admin.
+2. Klik **Ambil agent terbaru**. Server mengambil asset rolling `agent-latest` dari GitHub Release.
+3. Jika GitHub Actions masih membangun commit tersebut, tunggu beberapa menit lalu klik lagi. Build dari commit lain sengaja ditolak.
+4. Setelah status **Siap dibagikan**, klik **Download paket agent** dan bagikan ZIP itu ke TS/store.
+
+Server memeriksa SHA source harus sama dengan versi server, capability manifest, checksum EXE, ukuran dan struktur ZIP. Setelah lolos, server menambahkan installer terbaru dari source yang sedang berjalan serta `ca.crt` publik kantor. Paket tidak mengambil database, private key TLS, config, credential/UUID, state, log, atau XML dari PC server/store. Pemasangan di PC store tetap manual dan identitas PC dibuat oleh installer.
 
 Untuk lokasi data nonstandar, gunakan parameter `-DataPath` pada setup-updater.ps1. Database harus SQLite bernama siams.db pada lokasi data tersebut dan harus cocok dengan database server aktif. PostgreSQL/lokasi database yang tidak cocok akan ditolak, bukan diam-diam direset.
 

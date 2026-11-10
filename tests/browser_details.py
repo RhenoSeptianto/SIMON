@@ -4,13 +4,14 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 os.environ['SIAMS_DATA']=tempfile.mkdtemp(prefix='siams-browser-')
-from backend.main import DB,User,Device,Sample,password
+from backend.main import DB,User,Device,Sample,UserDeviceAccess,password
 from playwright.sync_api import sync_playwright,expect
 import httpx
 with DB() as s:
- s.add_all([User(name='QA Admin',username='qaadmin',password=password('1'),role='super_admin'),User(name='QA TS',username='qats',password=password('1'),role='ts')])
+ owner=User(name='QA Owner',username='qaowner',password=password('1'),role='ts')
+ s.add_all([User(name='QA Admin',username='qaadmin',password=password('1'),role='super_admin'),User(name='QA TS',username='qats',password=password('1'),role='ts'),owner])
  d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'},{'drive_letter':'D:','free_percent':15},{'drive_letter':'E:','free_percent':5}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44,'sentinel_tip':'No actions needed.','power_state':'Inactive (without monitoring) (since 11/6/2026 3:58:38 PM)','estimated_remaining_lifetime':'more than 414 days','sentinel_description':'The status of the solid state disk is PERFECT. Problematic or weak sectors were not found.'},{'model':'QA HDD','serial_number':'QA-HDD-2','source':'sentinel','health_percent':70,'performance_percent':100,'temperature_c':68}]}))
- s.add(d);s.flush();did=d.id
+ s.add(d);s.flush();did=d.id;s.add(UserDeviceAccess(user_id=owner.id,device_id=did))
  for index in range(4):s.add(Sample(device_id=did,event_id=str(uuid.uuid4()),collected=time.time()-7200+index*300,payload=json.dumps({'cpu_usage':20+index,'ram_percent':50+index})))
  s.commit()
 server=subprocess.Popen([sys.executable,'-m','uvicorn','backend.main:app','--port','8769','--no-access-log'],cwd=ROOT,env=os.environ.copy(),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
@@ -30,8 +31,10 @@ try:
   page.locator('[name=username]').fill('qaadmin');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
   expect(page.locator('#sidebarVersion')).to_have_text('SIMON v'+(ROOT/'VERSION').read_text().strip())
   expect(page.get_by_role('button',name='UpdateSimon',exact=True)).to_be_visible()
+  expect(page.get_by_role('columnheader',name='TS',exact=True)).to_be_visible()
   expect(page.get_by_role('columnheader',name='Health Disk',exact=True)).to_be_visible()
   pc_row=page.locator('[data-device="'+str(did)+'"]').locator('xpath=ancestor::tr')
+  expect(pc_row.get_by_text('QA Owner',exact=True)).to_be_visible()
   expect(pc_row.locator('.disk-health-item')).to_have_count(2)
   expect(pc_row.locator('.disk-health-item').nth(0)).to_contain_text('95%')
   expect(pc_row.locator('.disk-health-item').nth(0)).to_have_class('disk-health-item disk-health-good')
@@ -88,6 +91,7 @@ try:
     expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else 'UpdateSimon' if section=='Updates' else section)
     if section=='Updates':
      expect(page.get_by_role('heading',name='Update aplikasi SIMON')).to_be_visible()
+     expect(page.get_by_role('heading',name='Agent store terbaru')).to_be_visible()
      expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_disabled()
      expect(page.get_by_text('Pemasangan awal diperlukan satu kali')).to_be_visible()
     if section=='Reports':
@@ -119,6 +123,7 @@ try:
   progress_markup=page.evaluate("updateCard({ready:true,version:'0.2.2',current:'a'.repeat(40),check:{},job:{state:'installing',message:'Memasang',started_at:Date.now()/1000-12,updated_at:Date.now()/1000},busy:true,maintenance:false})")
   assert 'Update sedang berjalan' in progress_markup and 'Berjalan' in progress_markup and 'Pemasangan' in progress_markup
   disconnect=[False];update_success=[False]
+  agent_state={'ready':False,'current_sha':'a'*40,'download':None}
   def updater_status(route):
    if disconnect[0]:
     disconnect[0]=False;route.abort();return
@@ -132,10 +137,17 @@ try:
    if update_success[0]:update_state.update(current='b'*40,version='0.3.0',busy=False,maintenance=False,job={'state':'success','message':'Update berhasil. Server sudah siap digunakan.'})
    else:update_state.update(busy=False,maintenance=False,job={'state':'rolled_back','message':'Update gagal, versi sebelumnya berhasil dipulihkan.','error':'Uji health check gagal'})
    route.fulfill(json={'job_id':'test-job'})
+  def agent_prepare(route):
+   agent_state.update(ready=True,source_sha='a'*40,size=15728640,download='/api/system/agent-package/download')
+   route.fulfill(json=agent_state)
   page.route('**/api/system/update/status',updater_status)
   page.route('**/api/system/update/check',updater_check)
   page.route('**/api/system/update/start',updater_start)
+  page.route('**/api/system/agent-package/status',lambda route:route.fulfill(json=agent_state))
+  page.route('**/api/system/agent-package/prepare',agent_prepare)
   page.get_by_role('button',name='UpdateSimon',exact=True).click()
+  page.get_by_role('button',name='Ambil agent terbaru',exact=True).click()
+  expect(page.get_by_role('link',name='Download paket agent',exact=True)).to_be_visible()
   expect(page.locator('.nav-update-available')).to_be_hidden()
   expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_enabled()
   page.get_by_role('button',name='Cek update',exact=True).click()
@@ -156,7 +168,9 @@ try:
   page.unroute('**/api/system/update/status',updater_status)
   page.unroute('**/api/system/update/check',updater_check)
   page.unroute('**/api/system/update/start',updater_start)
-  print('PASS: updater setup notice, check/update controls, disconnect recovery, rollback and automatic reload after success; no real deployment triggered.')
+  page.unroute('**/api/system/agent-package/status')
+  page.unroute('**/api/system/agent-package/prepare',agent_prepare)
+  print('PASS: TS names, updater controls and validated agent package download work; rollback and automatic reload remain safe.')
   with DB() as s:
    from backend.main import Alert
    s.add(Alert(device_id=did,category='disk_free',message='QA storage alert'));s.commit()

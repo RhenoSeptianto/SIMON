@@ -210,3 +210,11 @@ Menu UpdateSimon menampilkan titik kuning jika hasil **Cek update** terakhir men
 Kolom Storage tersisa dihapus kembali dari Overview/Devices agar tabel lebih ringkas; kondisi storage tetap tersedia di tab Storage, Alerts, laporan Excel, dan filter Perlu perhatian. Tab browser memakai favicon SIMON berupa monitor dan garis telemetry dengan warna brand.
 
 Badge Alerts sekarang menghitung alert baru sejak halaman Alerts terakhir dibuka untuk setiap akun pada browser tersebut. Saat Alerts dibuka, posisi alert terbaru disimpan di localStorage dan badge langsung hilang; alert baru berikutnya akan memunculkan angka kembali. Status masalah aktif tetap tersimpan dan ditampilkan di halaman Alerts sampai diselesaikan.
+
+## 0.2.6 — Nama TS dan paket agent dari UpdateSimon
+
+Overview dan Devices menampilkan kolom **TS** berisi nama semua akun TS yang diassign ke perangkat. Super Admin tetap melihat semua PC; kolom ini hanya menjelaskan penanggung jawab dan tidak mengubah cakupan akses atau assignment.
+
+UpdateSimon kini memiliki bagian **Agent store terbaru**. GitHub Actions membangun template Windows x64 untuk setiap commit main dan menerbitkan asset rolling tetap. Server hanya menerima artifact dengan SHA source yang sama persis dengan versi server aktif, capability agent wajib lengkap dan checksum EXE sesuai manifest. Struktur ZIP dan batas ukuran juga divalidasi. Server lalu membungkus EXE dengan script installer dari versi aktif serta CA publik kantor, dan menyimpan hasil di shared data agar tetap tersedia lintas release web. Database, private key, config, credential/UUID, state, log dan XML tidak disertakan. Hanya Super Admin yang dapat menyiapkan/mengunduh paket; distribusi dan instalasi ke PC store tetap manual.
+
+Validasi mencakup paket valid, penolakan SHA berbeda, checksum/status paket, role/CSRF/download endpoint, serta browser desktop/mobile/light/dark untuk nama TS dan alur Ambil agent–Download. Update/rollback web yang sudah ada tetap diuji. Cache aset dinaikkan ke v29 dan versi menjadi 0.2.6.

@@ -3,9 +3,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
-    paths: ['agent/**', 'tools/build_agent.py', 'tools/requirements-build.txt', 'deployment/agent/**', '.github/workflows/build-agent.yml']
+concurrency:
+  group: simon-agent-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -22,3 +24,13 @@ jobs:
           name: SIMONAgent-template-Windows-x64
           path: release/SIMONAgent-template.zip
           retention-days: 30
+      - name: Publish rolling latest agent template
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (gh release view agent-latest --repo $env:GITHUB_REPOSITORY 2>$null) {
+            gh release upload agent-latest release/SIMONAgent-template.zip --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create agent-latest release/SIMONAgent-template.zip --title "SIMON Agent terbaru" --notes "Artifact agent Windows x64 terbaru. Gunakan paket kantor dari UpdateSimon agar CA publik kantor disertakan." --latest=false --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY
+          }
