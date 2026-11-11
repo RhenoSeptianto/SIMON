@@ -27,6 +27,7 @@ if(Test-Path -LiteralPath $databaseUrlFile -PathType Leaf){
 $serverTransition=$false
 Push-Location -LiteralPath $rootPath
 try {
+ Write-Host '[Update 1/4] Memeriksa server dan database aktif...'
  # Load the new health endpoint WITHOUT changing the database/task arguments first.
  # This prevents a leftover SQLite file from replacing an active external database.
  $serverTransition=$true
@@ -40,18 +41,18 @@ try {
  if($databaseKind -like 'postgresql*'){$setupArguments+=@('--database-url-file',$databaseUrlFile)}
  & $python @setupArguments
  if($LASTEXITCODE -ne 0){throw 'Pemasangan helper gagal. Baca pesan di atas.'}
+ Write-Host '[Update 2/4] Mendaftarkan helper UpdateSimon...'
  $updaterAction=New-ScheduledTaskAction -Execute $python -Argument ('"{0}" --config "{1}"' -f (Join-Path $folder 'worker.py'),(Join-Path $folder 'config.json')) -WorkingDirectory $rootPath
  $trigger=New-ScheduledTaskTrigger -AtStartup
  $settings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances Queue -RestartCount 2 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
  Register-ScheduledTask -TaskName SIMONUpdater -Action $updaterAction -Trigger $trigger -Settings $settings -User SYSTEM -RunLevel Highest -Force -Description 'SIMON updater and automatic rollback/recovery' | Out-Null
- # Restrict all updater commands/config to Administrators and SYSTEM.
- $targets=@(Get-ChildItem -LiteralPath $folder -Force -Recurse | Sort-Object {$_.FullName.Length} -Descending)
- $targets+=Get-Item -LiteralPath $folder
- foreach($item in $targets){
-  $rights=if($item.PSIsContainer){'(OI)(CI)F'}else{'F'}
-  & icacls.exe $item.FullName /inheritance:r /grant:r "*S-1-5-18:$rights" "*S-1-5-32-544:$rights" /remove:g '*S-1-5-32-545' '*S-1-5-11' '*S-1-1-0' /Q | Out-Null
-  if($LASTEXITCODE -ne 0){throw "Gagal melindungi helper: $($item.FullName)"}
- }
+ # Secure the root once, then reset descendants in one native recursive pass so
+ # large release virtualenvs do not require thousands of icacls processes.
+ Write-Host '[Update 3/4] Mengamankan folder helper (bisa beberapa detik)...'
+ & icacls.exe $folder /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /remove:g '*S-1-5-32-545' '*S-1-5-11' '*S-1-1-0' /Q | Out-Null
+ if($LASTEXITCODE -ne 0){throw "Gagal melindungi folder helper: $folder"}
+ & icacls.exe (Join-Path $folder '*') /reset /T /C /Q | Out-Null
+ if($LASTEXITCODE -ne 0){throw "Gagal menerapkan permission turunan helper: $folder"}
  $current=Get-Content -LiteralPath (Join-Path $folder 'current.json') -Raw | ConvertFrom-Json
  if(-not (Test-Path -LiteralPath $current.root)){throw 'Folder versi aktif tidak ditemukan. Task server belum diubah.'}
  if(-not $current.arguments){throw 'Konfigurasi versi belum lengkap. Periksa pemasangan helper.'}
@@ -60,6 +61,7 @@ try {
  $serverAction=New-ScheduledTaskAction -Execute $current.python -Argument $current.arguments -WorkingDirectory $current.root
  Set-ScheduledTask -TaskName SIMONServer -Action $serverAction | Out-Null
  if(-not $SkipRestart){Start-ScheduledTask -TaskName SIMONServer}
+ Write-Host '[Update 4/4] Memeriksa server setelah konfigurasi...'
  & $python -m tools.server_healthcheck --ca (Join-Path $DataPath 'tls\ca.crt') --url 'https://127.0.0.1:8443/api/health' --expected-version $current.sha --expected-kind $databaseKind --expected-id $databaseId
  if($LASTEXITCODE -ne 0){throw 'Helper terpasang, tetapi server belum lolos health check. Periksa data\logs\server.log.'}
  @{task='SIMONUpdater';installed_at=(Get-Date -Format s)} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $folder 'installed.json') -Encoding UTF8

@@ -1,6 +1,6 @@
 # Status terbaru
 
-## PostgreSQL untuk skala ratusan store (1.1.1)
+## PostgreSQL untuk skala ratusan store (1.1.2)
 
 Server mendukung PostgreSQL lokal melalui `data/database-url.txt` yang dilindungi ACL SYSTEM/Administrators. Migrasi satu kali membuat backup SQLite, menyalin seluruh tabel dalam transaksi, menyesuaikan sequence, memverifikasi fingerprint database melalui HTTPS, lalu mengonfigurasi ulang Task Scheduler dan UpdateSimon. Agent, URL HTTPS, UUID, kode store dan assignment tidak berubah.
 

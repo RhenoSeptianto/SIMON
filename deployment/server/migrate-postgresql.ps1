@@ -12,26 +12,31 @@ if(-not (Get-Command psql.exe -ErrorAction SilentlyContinue)){
 }
 & $python -m pip install --disable-pip-version-check -r (Join-Path $root 'deployment\server\requirements.txt')
 if($LASTEXITCODE -ne 0){throw 'Dependency PostgreSQL gagal dipasang.'}
+Write-Host '[1/6] Dependency siap.'
 $secure=Read-Host "Password user PostgreSQL '$AdminUser'" -AsSecureString
 $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
 $task=Get-ScheduledTask -TaskName SIMONServer -ErrorAction Stop;$oldAction=$task.Actions | Select-Object -First 1
 try{
  $env:SIMON_PG_ADMIN_PASSWORD=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+ Write-Host '[2/6] Menghentikan SIMON dan membuat backup SQLite...'
  if($task.State -in @('Running','Queued')){Stop-ScheduledTask -TaskName SIMONServer;Start-Sleep -Seconds 3}
  Push-Location $root
  & $python -m tools.migrate_postgresql --source $source --data $data --host $HostName --port $Port --admin-user $AdminUser
  if($LASTEXITCODE -ne 0){throw 'Pemindahan data ke PostgreSQL gagal.'}
+ Write-Host '[3/6] Seluruh data berhasil dipindahkan ke PostgreSQL.'
  & icacls.exe $urlFile /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' /Q | Out-Null
  if($LASTEXITCODE -ne 0){throw 'Gagal melindungi file kredensial database.'}
  $arguments='-m backend.run_server --data "'+$data+'" --database-url-file "'+$urlFile+'"'
  $newAction=New-ScheduledTaskAction -Execute $oldAction.Execute -Argument $arguments -WorkingDirectory $oldAction.WorkingDirectory
  Set-ScheduledTask -TaskName SIMONServer -Action $newAction | Out-Null
  Start-ScheduledTask -TaskName SIMONServer
+ Write-Host '[4/6] SIMON dinyalakan menggunakan PostgreSQL.'
  & $python -m tools.server_healthcheck --ca (Join-Path $data 'tls\ca.crt') --url 'https://127.0.0.1:8443/api/health' --expected-kind postgresql
  if($LASTEXITCODE -ne 0){throw 'Server PostgreSQL belum sehat.'}
+ Write-Host '[5/6] Server dan database PostgreSQL sehat.'
  & (Join-Path $PSScriptRoot 'setup-updater.ps1') -DataPath $data
  if($LASTEXITCODE -ne 0){throw 'PostgreSQL aktif, tetapi helper UpdateSimon gagal dikonfigurasi ulang.'}
- Write-Host 'Migrasi PostgreSQL selesai. Agent tidak perlu dipasang ulang.'
+ Write-Host '[6/6] Migrasi PostgreSQL selesai. Agent tidak perlu dipasang ulang.'
 } catch {
  try{if((Get-ScheduledTask -TaskName SIMONServer).State -in @('Running','Queued')){Stop-ScheduledTask -TaskName SIMONServer};Set-ScheduledTask -TaskName SIMONServer -Action $oldAction | Out-Null;Start-ScheduledTask -TaskName SIMONServer}catch{}
  throw
