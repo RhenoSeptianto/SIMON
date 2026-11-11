@@ -230,3 +230,7 @@ Nama menu dan istilah teknis yang sudah familiar tetap memakai Overview, Devices
 Detail perangkat menampilkan nama TS, versi/build agent dan status kompatibilitas: Agent terbaru, Agent perlu diperbarui, atau Versi agent tidak diketahui. Agent v1 mengirim version dan SHA build di inventory tanpa request/polling tambahan. Data model, CPU atau serial yang belum lengkap mendapat penjelasan dan tindakan yang jelas. UpdateSimon memisahkan kartu update aplikasi dan paket agent, menampilkan versi, commit, ukuran dan waktu paket. Feedback tindakan memakai toast/spinner CSS ringan tanpa library UI.
 
 Tidak ada framework frontend, gambar besar, grafik dashboard baru, polling tambahan, service baru atau migrasi database. Interval telemetry tetap sekitar 10 detik, histori CPU/RAM 5 menit, Sentinel mengikuti perubahan XML dan offline sekitar 45 detik untuk agent baru. Upgrade mempertahankan database, UUID, kode store, histori, assignment dan konfigurasi. Manifest agent format 10 menambahkan capability agent_build_identity. Cache aset v31.
+
+## 1.0.1 — Log telemetry lebih ringan
+
+Agent tidak lagi menulis baris internal httpx untuk setiap request `HTTP 200`; startup, enrollment, collector error, konflik kode store, putus koneksi dan respons gagal tetap dicatat. Server juga menyaring access log khusus `POST /api/agent/report` yang berhasil (2xx), tetapi tetap mencatat request agent yang gagal serta endpoint lain. Rotasi dan batas ukuran log tetap sama. Interval, payload, status Online/Offline, database dan UI tidak berubah.

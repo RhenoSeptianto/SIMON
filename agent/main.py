@@ -7,6 +7,9 @@ from agent.collectors import inventory,metrics
 from agent.sentinel import SentinelWatcher,DEFAULT_XML
 from agent.config import load_config,validate_server,tls_context,DEFAULT_SERVER
 
+def quiet_transport_logs():
+ for name in ('httpx','httpcore'):logging.getLogger(name).setLevel(logging.WARNING)
+
 def save_identity(path,data):
  temporary=path.with_name(path.name+'.'+str(os.getpid())+'.tmp')
  temporary.write_text(json.dumps(data),encoding='utf-8')
@@ -38,10 +41,12 @@ def run():
   background(args.state,args.config);return
  state=Path(args.state); state.mkdir(parents=True,exist_ok=True)
  logging.basicConfig(level=logging.INFO,format='%(asctime)s %(levelname)s %(message)s',handlers=[RotatingFileHandler(state/'agent.log',maxBytes=1048576,backupCount=3,encoding='utf8')]+([] if os.getenv('SIAMS_WORKER_CAPTURE')=='1' else [logging.StreamHandler()]))
+ quiet_transport_logs()
  if not args.once and not args.diagnose:
   from agent.user_startup import single_instance
   if not single_instance(state,args.server):
    logging.info('Agent dengan state yang sama sudah aktif; duplikat dibatalkan.');return
+ logging.info('agent_started server=%s store_code=%s',args.server,store_code)
  identity=state/'identity.json'
  from agent.identity import ensure_identity,machine_id
  ident=ensure_identity(state);identity=state/'identity.json'; queue=sqlite3.connect(state/'queue.db'); queue.execute('create table if not exists queue(id integer primary key,payload text)'); queue.execute('pragma journal_size_limit=1048576')
@@ -80,8 +85,8 @@ def run():
     if not ident.get('credential'):
      client.post('/api/agent/enroll',json={**{k:ident[k] for k in ('uuid','claim')},'inventory':collect_inventory()}).raise_for_status()
      r=client.post('/api/agent/claim',json={k:ident[k] for k in ('uuid','claim')}); r.raise_for_status(); result=r.json()
-     if result.get('credential'): ident['credential']=result['credential']; save_identity(identity,ident)
-     elif result.get('status')=='credential_issued' and previous_credential: ident['credential']=previous_credential
+     if result.get('credential'): ident['credential']=result['credential']; save_identity(identity,ident);logging.info('enrollment_ready store_code=%s',store_code)
+     elif result.get('status')=='credential_issued' and previous_credential: ident['credential']=previous_credential;logging.info('enrollment_ready store_code=%s',store_code)
      else: logging.info('enrollment_status=%s',result['status']); backoff=300
     if ident.get('credential'):
      for id,payload in queue.execute('select id,payload from queue order by id limit 50').fetchall():

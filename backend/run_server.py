@@ -3,9 +3,16 @@ import os,logging
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 ROOT=Path(__file__).resolve().parents[1]
-os.environ['SIAMS_PRODUCTION']='1'
+
+class RoutineTelemetryFilter(logging.Filter):
+ def filter(self,record):
+  try:
+   path=str(record.args[2]).split('?',1)[0];status=int(record.args[4])
+   return not (path=='/api/agent/report' and 200<=status<300)
+  except (IndexError,TypeError,ValueError):return True
 
 def main():
+ os.environ['SIAMS_PRODUCTION']='1'
  import argparse
  parser=argparse.ArgumentParser();parser.add_argument('--data');parser.add_argument('--version');parser.add_argument('--database');args=parser.parse_args()
  if args.data:os.environ['SIAMS_DATA']=str(Path(args.data).resolve())
@@ -19,6 +26,7 @@ def main():
  logs=data/'logs';logs.mkdir(parents=True,exist_ok=True)
  handler=RotatingFileHandler(logs/'server.log',maxBytes=5242880,backupCount=3,encoding='utf8')
  handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s'))
+ handler.addFilter(RoutineTelemetryFilter())
  for name in ('uvicorn','uvicorn.error','uvicorn.access'):
   logger=logging.getLogger(name);logger.handlers=[handler];logger.propagate=False;logger.setLevel(logging.INFO)
  uvicorn.run('backend.main:app',host='0.0.0.0',port=8443,ssl_keyfile=str(tls/'server.key'),ssl_certfile=str(tls/'server.crt'),log_config=None,proxy_headers=False)
