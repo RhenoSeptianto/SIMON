@@ -4,13 +4,14 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 os.environ['SIAMS_DATA']=tempfile.mkdtemp(prefix='siams-browser-')
+os.environ['SIAMS_BUILD_SHA']='a'*40
 from backend.main import DB,User,Device,Sample,UserDeviceAccess,password
 from playwright.sync_api import sync_playwright,expect
 import httpx
 with DB() as s:
  owner=User(name='QA Owner',username='qaowner',password=password('1'),role='ts')
  s.add_all([User(name='QA Admin',username='qaadmin',password=password('1'),role='super_admin'),User(name='QA TS',username='qats',password=password('1'),role='ts'),owner])
- d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test'}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'},{'drive_letter':'D:','free_percent':15},{'drive_letter':'E:','free_percent':5}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44,'sentinel_tip':'No actions needed.','power_state':'Inactive (without monitoring) (since 11/6/2026 3:58:38 PM)','estimated_remaining_lifetime':'more than 414 days','sentinel_description':'The status of the solid state disk is PERFECT. Problematic or weak sectors were not found.'},{'model':'QA HDD','serial_number':'QA-HDD-2','source':'sentinel','health_percent':70,'performance_percent':100,'temperature_c':68}]}))
+ d=Device(uuid=str(uuid.uuid4()),hostname='QA-PC',store_code='00115',ip='10.0.0.8',serial='QA-SERIAL',claim='unused',status='approved',last_seen=time.time(),inventory=json.dumps({'manufacturer':'QA','model':'Test PC','cpu':'Test CPU','os_name':'Windows test','agent_version':'1.0.0','agent_build_sha':'a'*40}),metrics=json.dumps({'cpu_usage':24,'ram_percent':58,'ram_total':16*1073741824,'ram_used':9*1073741824,'metrics_at':time.time(),'storage_at':time.time(),'storage_source':'sentinel','sentinel_status':'fresh','sentinel_report_time':'11/6/2026 2:23:03 PM','sentinel_file_updated_at':time.time(),'volumes':[{'drive_letter':'C:','total_bytes':500*1073741824,'free_bytes':400*1073741824,'used_percent':20,'filesystem':'NTFS'},{'drive_letter':'D:','free_percent':15},{'drive_letter':'E:','free_percent':5}],'disks':[{'model':'QA SSD','capacity_bytes':500*1073741824,'health_status':'Reported','source':'sentinel','health_percent':95,'performance_percent':100,'temperature_c':44,'sentinel_tip':'No actions needed.','power_state':'Inactive (without monitoring) (since 11/6/2026 3:58:38 PM)','estimated_remaining_lifetime':'more than 414 days','sentinel_description':'The status of the solid state disk is PERFECT. Problematic or weak sectors were not found.'},{'model':'QA HDD','serial_number':'QA-HDD-2','source':'sentinel','health_percent':70,'performance_percent':100,'temperature_c':68}]}))
  s.add(d);s.flush();did=d.id;s.add(UserDeviceAccess(user_id=owner.id,device_id=did))
  for index in range(4):s.add(Sample(device_id=did,event_id=str(uuid.uuid4()),collected=time.time()-7200+index*300,payload=json.dumps({'cpu_usage':20+index,'ram_percent':50+index})))
  s.commit()
@@ -55,6 +56,7 @@ try:
   assert page.evaluate("deviceNeedsAttention({online:true,metrics:{disks:[{temperature_c:66}]}})")
   assert page.evaluate("deviceNeedsAttention({online:true,metrics:{volumes:[{free_percent:9}]}})")
   assert not page.evaluate("deviceNeedsAttention({online:true,metrics:{storage_source:'sentinel',sentinel_status:'fresh',disks:[{source:'sentinel',health_percent:90,temperature_c:40}],volumes:[{free_percent:20}]}})")
+  assert 'Data spesifikasi belum lengkap' in page.evaluate("incompleteInventory({inventory:{cpu:'CPU'},serial:''})")
   # Newly enrolled PCs appear without navigation/reload, even while schedule keeps focus.
   with DB() as s:
    for index in range(9):s.add(Device(uuid=str(uuid.uuid4()),hostname='AUTO-OLD-'+str(index),store_code='AUTO-'+str(index),ip='10.9.0.'+str(index),serial='AUTO-'+str(index),claim='unused',status='approved',last_seen=time.time()))
@@ -87,11 +89,11 @@ try:
   for theme in ('light','dark'):
    page.evaluate("dark => document.body.classList.toggle('dark', dark)",theme=='dark')
    for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database','Updates'):
-    page.get_by_role('button',name='Laporan' if section=='Reports' else 'UpdateSimon' if section=='Updates' else section,exact=True).click()
-    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else 'UpdateSimon' if section=='Updates' else section)
+    page.get_by_role('button',name='UpdateSimon' if section=='Updates' else section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text('UpdateSimon' if section=='Updates' else section)
     if section=='Updates':
      expect(page.get_by_role('heading',name='Update aplikasi SIMON')).to_be_visible()
-     expect(page.get_by_role('heading',name='Agent store terbaru')).to_be_visible()
+     expect(page.get_by_role('heading',name='Paket agent store')).to_be_visible()
      expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_disabled()
      expect(page.get_by_text('Pemasangan awal diperlukan satu kali')).to_be_visible()
     if section=='Reports':
@@ -113,8 +115,8 @@ try:
      page.screenshot(path=str(target/f'{section.lower()}-{theme}.png'),full_page=True)
    page.set_viewport_size({'width':390,'height':844})
    for section in ('Overview','Devices','Users','Alerts','Reports','Audit','Database','Updates'):
-    page.get_by_role('button',name='Laporan' if section=='Reports' else 'UpdateSimon' if section=='Updates' else section,exact=True).click()
-    expect(page.locator('#content h2')).to_have_text('Laporan' if section=='Reports' else 'UpdateSimon' if section=='Updates' else section)
+    page.get_by_role('button',name='UpdateSimon' if section=='Updates' else section,exact=True).click()
+    expect(page.locator('#content h2')).to_have_text('UpdateSimon' if section=='Updates' else section)
     assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),section
    page.screenshot(path=str(target/f'dashboard-mobile-{theme}.png'),full_page=True)
    page.set_viewport_size({'width':1280,'height':900})
@@ -191,6 +193,9 @@ try:
   expect(page.get_by_text('QA-PC',exact=True)).to_be_visible()
   page.get_by_text('QA-PC',exact=True).click()
   dialog=page.locator('dialog');expect(dialog).to_be_visible();expect(dialog.get_by_text('24%',exact=True)).to_be_visible()
+  expect(dialog.get_by_text('Agent terbaru',exact=True)).to_be_visible()
+  expect(dialog.locator('.device-meta')).to_contain_text('QA Owner')
+  expect(dialog.locator('.inventory-notice')).to_have_count(0)
   expect(dialog.locator('.monitoring-schedule')).to_have_count(0)
   expect(page.locator('#panel-overview').get_by_text('Tersisa 80%',exact=True)).to_be_visible()
   page.get_by_role('tab',name='Storage',exact=True).click();expect(dialog.get_by_text('QA SSD',exact=True)).to_be_visible();expect(dialog.get_by_text('Kesehatan 95%',exact=True)).to_be_visible();expect(dialog.get_by_text('100%',exact=True).first).to_be_visible();expect(dialog.get_by_text('Store 00115',exact=True)).to_be_visible();expect(dialog.get_by_text('44 \u00b0C',exact=True)).to_be_visible()
@@ -207,7 +212,7 @@ try:
   page.locator('#historySlider').focus();page.keyboard.press('Home');expect(page.locator('#historyTooltip')).to_contain_text('CPU 20%')
   page.get_by_label('Periode histori').select_option('1');expect(page.get_by_text('Belum ada sampel pada periode ini')).to_be_visible()
   page.get_by_label('Periode histori').select_option('168');expect(page.locator('#historySVG')).to_be_visible()
-  page.get_by_role('tab',name='Akses User',exact=True).click();expect(page.get_by_role('button',name='Revoke credential',exact=True)).to_have_count(0);page.get_by_label('Pilih user TS').select_option(label='QA TS (qats)');page.get_by_role('button',name='Assign',exact=True).click();expect(page.get_by_text('User berhasil diassign.')).to_be_visible()
+  page.get_by_role('tab',name='Akses User',exact=True).click();expect(page.get_by_role('button',name='Revoke credential',exact=True)).to_have_count(0);page.get_by_label('Pilih user TS').select_option(label='QA TS (qats)');page.get_by_role('button',name='Assign',exact=True).click();expect(page.locator('#assignmentSuccess')).to_have_text('User berhasil diassign.')
   page.get_by_role('tab',name='Ringkasan',exact=True).click();expect(dialog.get_by_text('42%',exact=True)).to_be_visible();page.get_by_role('button',name='Refresh data',exact=True).click();expect(page.get_by_role('tab',name='Ringkasan')).to_have_attribute('aria-selected','true')
   page.evaluate("document.body.classList.add('dark')")
   target=ROOT/'data'/'qa';target.mkdir(parents=True,exist_ok=True)

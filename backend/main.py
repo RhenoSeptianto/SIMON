@@ -89,6 +89,12 @@ def device(s,id,u):
  d=s.get(Device,id)
  if not d or not allowed(u,d): raise HTTPException(404,'Perangkat tidak ditemukan')
  return d
+def agent_compatibility(inventory):
+ version=str(inventory.get('agent_version') or '').strip();build=str(inventory.get('agent_build_sha') or '').strip().lower();expected=str(os.getenv('SIAMS_BUILD_SHA','')).strip().lower()
+ valid_build=len(build)==40 and all(x in '0123456789abcdef' for x in build)
+ valid_expected=len(expected)==40 and all(x in '0123456789abcdef' for x in expected)
+ state='current' if valid_build and valid_expected and build==expected else 'outdated' if valid_build and valid_expected else 'unknown'
+ return {'status':state,'label':{'current':'Agent terbaru','outdated':'Agent perlu diperbarui','unknown':'Versi agent tidak diketahui'}[state],'version':version or None,'build_sha':build if valid_build else None,'expected_sha':expected if valid_expected else None}
 def serialize(d):
  inventory=json.loads(d.inventory)
  # Keep legacy agents online using their old grace window during gradual rollout.
@@ -98,7 +104,7 @@ def serialize(d):
   if 0<interval<86400:grace=max(45,interval*3+15)
  except (ValueError,TypeError):pass
  if os.getenv('OFFLINE_SECONDS'):grace=float(os.environ['OFFLINE_SECONDS'])
- return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<grace,'last_seen':d.last_seen,'inventory':inventory,'metrics':localize_metrics(json.loads(d.metrics))}
+ return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<grace,'last_seen':d.last_seen,'inventory':inventory,'agent':agent_compatibility(inventory),'metrics':localize_metrics(json.loads(d.metrics))}
 class Login(BaseModel):
  username:str; password:str
 attempts={}
@@ -165,17 +171,22 @@ def edit_user(id:int,v:UserInput,u=Depends(admin),s:Session=Depends(db)):
  x.access=[UserDeviceAccess(device_id=id) for id in (set(v.devices) if v.role not in ('super_admin',) else set())]
  if security_changed: s.query(LoginSession).filter_by(user_id=id).delete()
  audit(s,u.id,'edit_user',id); s.commit(); return {'ok':True}
+def assigned_ts(s,device_ids):
+ result={device_id:[] for device_id in device_ids}
+ if result:
+  for access,owner in s.query(UserDeviceAccess,User).join(User,User.id==UserDeviceAccess.user_id).filter(UserDeviceAccess.device_id.in_(result.keys()),User.role=='ts').order_by(User.name).all():result[access.device_id].append(owner.name)
+ return result
+
 @app.get('/api/devices')
 def devices(q:str='',store_id:int|None=None,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
  models=[d for d in visible(s,u) if q.lower() in (d.hostname+' '+(d.ip or '')+' '+d.store_code).lower() and (store_id is None or d.store_id==store_id)]
- assigned={d.id:[] for d in models}
- if assigned:
-  for access,owner in s.query(UserDeviceAccess,User).join(User,User.id==UserDeviceAccess.user_id).filter(UserDeviceAccess.device_id.in_(assigned.keys()),User.role=='ts').order_by(User.name).all():assigned[access.device_id].append(owner.name)
+ assigned=assigned_ts(s,[d.id for d in models])
  rows=[{**serialize(d),'ts_names':assigned[d.id]} for d in models]
  size=max(1,min(limit_,200)); start=(max(page,1)-1)*size
  return {'total':len(rows),'items':rows[start:start+size]}
 @app.get('/api/devices/{id}')
-def detail(id:int,u=Depends(user),s:Session=Depends(db)): return serialize(device(s,id,u))
+def detail(id:int,u=Depends(user),s:Session=Depends(db)):
+ d=device(s,id,u);return {**serialize(d),'ts_names':assigned_ts(s,[d.id])[d.id]}
 class DeviceAssignments(BaseModel):
  user_ids:list[int]=Field(default_factory=list)
 

@@ -52,7 +52,7 @@ def prepare(data,root,current_sha,fetch=fetch_template):
  try:
   fetch(template);metadata=validate_template(template,current_sha)
   make_package(root,template_path=template,ca_path=Path(data)/'tls'/'ca.crt',output_path=output)
-  result={'source_sha':current_sha,'exe_sha256':metadata['exe_sha256'],'package_sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'size':output.stat().st_size,'created_at':time.time(),'filename':'SIMONAgent-store.zip','error':None}
+  result={'source_sha':current_sha,'agent_version':metadata.get('version'),'exe_sha256':metadata['exe_sha256'],'package_sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'size':output.stat().st_size,'created_at':time.time(),'filename':'SIMONAgent-store.zip','error':None}
   write_json(base/'status.json',result);return {**result,'ready':True,'download':'/api/system/agent-package/download'}
  except Exception as error:
   previous=read_json(base/'status.json');previous.update(error=str(error),failed_at=time.time());write_json(base/'status.json',previous)

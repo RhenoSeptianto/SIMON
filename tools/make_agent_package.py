@@ -2,7 +2,7 @@
 from pathlib import Path
 import shutil,zipfile,json,hashlib,tempfile
 ROOT=Path(__file__).resolve().parents[1]
-REQUIRED_CAPABILITIES={'sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup','machine_single_instance','unique_store_code','machine_bound_identity'}
+REQUIRED_CAPABILITIES={'sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup','machine_single_instance','unique_store_code','machine_bound_identity','agent_build_identity'}
 
 def make_package(root=ROOT,template_path=None,ca_path=None,output_path=None):
  root=Path(root)
@@ -22,7 +22,7 @@ def make_package(root=ROOT,template_path=None,ca_path=None,output_path=None):
   if not exe.exists():raise RuntimeError('Template tidak lengkap')
   manifest=target/'agent-build.json'
   metadata=json.loads(manifest.read_text(encoding='utf-8')) if manifest.exists() else {}
-  if not REQUIRED_CAPABILITIES.issubset(metadata.get('capabilities',[])):raise RuntimeError('Template agent lama. Build ulang lewat tools/build-agent.bat atau ambil artifact GitHub terbaru (manifest 9/machine_bound_identity).')
+  if not REQUIRED_CAPABILITIES.issubset(metadata.get('capabilities',[])):raise RuntimeError('Template agent lama. Build ulang lewat tools/build-agent.bat atau ambil artifact GitHub terbaru (manifest 10/agent_build_identity).')
   if metadata.get('exe_sha256')!=hashlib.sha256(exe.read_bytes()).hexdigest():raise RuntimeError('Checksum executable template tidak sesuai manifest')
   installers=root/'deployment'/'agent'
   if installers.is_dir():

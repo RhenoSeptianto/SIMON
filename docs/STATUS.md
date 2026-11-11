@@ -222,3 +222,11 @@ Validasi mencakup paket valid, penolakan SHA berbeda, checksum/status paket, rol
 ## 0.2.7 — Inventory PC tahan terhadap PowerShell yang dibatasi
 
 Pada sebagian PC store, perintah CIM berhasil saat dijalankan manual tetapi stdout PowerShell kosong ketika dipanggil dari EXE agent. Agent tetap Online dan mengirim CPU/RAM, namun manufacturer, model, serial serta nama CPU tidak diperbarui. Kolektor terbaru membaca nilai hardware langsung dari Registry Windows sebagai fallback, lalu memakai nilai CIM nonkosong bila tersedia. Kegagalan CIM tidak lagi menggagalkan seluruh inventory. Perubahan memerlukan update server agar SHA build sama, lalu unduh dan pasang paket agent terbaru.
+
+## 1.0.0 — Rilis stabil ringan
+
+Nama menu dan istilah teknis yang sudah familiar tetap memakai Overview, Devices, Users, Alerts, Reports, Audit, Database, UpdateSimon, Online/Offline, CPU, RAM, Storage dan Health Disk. Instruksi, konfirmasi, error serta penjelasan tetap menggunakan bahasa Indonesia sederhana.
+
+Detail perangkat menampilkan nama TS, versi/build agent dan status kompatibilitas: Agent terbaru, Agent perlu diperbarui, atau Versi agent tidak diketahui. Agent v1 mengirim version dan SHA build di inventory tanpa request/polling tambahan. Data model, CPU atau serial yang belum lengkap mendapat penjelasan dan tindakan yang jelas. UpdateSimon memisahkan kartu update aplikasi dan paket agent, menampilkan versi, commit, ukuran dan waktu paket. Feedback tindakan memakai toast/spinner CSS ringan tanpa library UI.
+
+Tidak ada framework frontend, gambar besar, grafik dashboard baru, polling tambahan, service baru atau migrasi database. Interval telemetry tetap sekitar 10 detik, histori CPU/RAM 5 menit, Sentinel mengikuti perubahan XML dan offline sekitar 45 detik untuk agent baru. Upgrade mempertahankan database, UUID, kode store, histori, assignment dan konfigurasi. Manifest agent format 10 menambahkan capability agent_build_identity. Cache aset v31.

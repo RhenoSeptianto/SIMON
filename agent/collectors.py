@@ -1,5 +1,6 @@
 import json, socket, platform, subprocess, time, os
 import psutil
+from agent.build_info import VERSION as AGENT_VERSION,SOURCE_SHA as AGENT_BUILD_SHA
 
 def registry_inventory():
  if os.name!='nt':return {}
@@ -49,7 +50,7 @@ def powershell(script):
 def inventory():
  stats=psutil.net_if_stats()
  addresses=[a.address for name,values in psutil.net_if_addrs().items() if stats.get(name) and stats[name].isup for a in values if a.family==socket.AF_INET and not a.address.startswith(('127.','169.254.'))]
- result={'hostname':socket.gethostname(),'primary_ip':addresses[0] if addresses else '', 'ipv4':addresses,'os_name':platform.platform(),'architecture':platform.machine(),'agent_version':'0.1.0','cpu':platform.processor(),'physical_cores':psutil.cpu_count(logical=False),'logical_cores':psutil.cpu_count(),'last_boot':psutil.boot_time()}
+ result={'hostname':socket.gethostname(),'primary_ip':addresses[0] if addresses else '', 'ipv4':addresses,'os_name':platform.platform(),'architecture':platform.machine(),'agent_version':AGENT_VERSION,'agent_build_sha':AGENT_BUILD_SHA,'cpu':platform.processor(),'physical_cores':psutil.cpu_count(logical=False),'logical_cores':psutil.cpu_count(),'last_boot':psutil.boot_time()}
  if os.name=='nt':
   # Some endpoint-security products allow interactive CIM but suppress stdout
   # when PowerShell is launched by a frozen EXE. Registry values keep inventory

@@ -10,6 +10,16 @@ def report_values(client):
  w=load_workbook(BytesIO(client.get('/api/reports/xlsx').content))
  return [value for sheet in w for row in sheet.values for value in row]
 
+def test_agent_compatibility_uses_build_identity(monkeypatch):
+ from backend.main import agent_compatibility
+ monkeypatch.setenv('SIAMS_BUILD_SHA','a'*40)
+ current=agent_compatibility({'agent_version':'1.0.0','agent_build_sha':'a'*40})
+ old=agent_compatibility({'agent_version':'0.2.7','agent_build_sha':'b'*40})
+ unknown=agent_compatibility({'agent_version':'0.1.0'})
+ assert current['status']=='current' and current['label']=='Agent terbaru'
+ assert old['status']=='outdated' and old['label']=='Agent perlu diperbarui'
+ assert unknown['status']=='unknown' and unknown['label']=='Versi agent tidak diketahui'
+
 def test_full_flow_and_permissions():
  with DB() as s:
   s.add(User(name='Admin',username='admin',password=password('secure-pass-123'),role='super_admin')); s.commit()

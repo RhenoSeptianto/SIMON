@@ -138,6 +138,10 @@ Server menolak enrollment/inventory yang memakai UUID lama tetapi Machine ID ata
 
 Urutan rollout: hentikan agent lama; update source server dan restart backend; build EXE baru lalu buat paket dari CA server kantor; instal paket baru di tiap PC dengan kode store masing-masing; uji dua perangkat muncul bersamaan sebelum penyebaran luas. Semua config/data/log tetap di drive D.
 
+## SIMON 1.0
+
+Rilis 1.0 mempertahankan frontend HTML/CSS/JavaScript murni dan jadwal telemetry yang sama agar tetap ringan. Agent manifest format 10 (`agent_build_identity`) mengirim versi dan SHA build bersama inventory. Detail perangkat menampilkan kecocokan agent terhadap server tanpa request tambahan, nama TS, serta petunjuk bila model/CPU/serial belum lengkap. Agent lama tetap dapat mengirim data dan ditandai perlu diperbarui atau versi tidak diketahui. Update tidak menghapus database, UUID, kode store, histori, assignment, config maupun XML Sentinel.
+
 ## Update web dari dashboard (0.2.0)
 
 Pemasangan awal: pull source terbaru lalu jalankan `deployment/server/setup-updater.bat` sebagai Administrator satu kali pada PC server. Setelah itu Super Admin membuka **UpdateSimon → Cek update → Update sekarang**. Helper terpisah menyiapkan release/environment, backup dan memulihkan versi/database lama bila pemasangan atau health check gagal. Fitur ini tidak memperbarui EXE agent store. Lihat [panduan update web](docs/WEB_UPDATE.md).

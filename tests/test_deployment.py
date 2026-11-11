@@ -34,7 +34,7 @@ def test_agent_package_contains_public_ca_only(tmp_path):
  release=tmp_path/'release';release.mkdir()
  with zipfile.ZipFile(release/'SIMONAgent-template.zip','w') as z:
   z.writestr('SIMONAgent/SIMONAgent.exe',b'test executable fixture')
-  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup','machine_single_instance','unique_store_code','machine_bound_identity'],'exe_sha256':hashlib.sha256(b'test executable fixture').hexdigest()}))
+  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup','machine_single_instance','unique_store_code','machine_bound_identity','agent_build_identity'],'exe_sha256':hashlib.sha256(b'test executable fixture').hexdigest()}))
   z.writestr('install.bat','test fixture')
  result=make_package(tmp_path)
  with zipfile.ZipFile(result) as z:
@@ -66,7 +66,7 @@ def test_store_package_refreshes_installer_without_rebuilding_exe(tmp_path):
  release=tmp_path/'release';release.mkdir()
  with zipfile.ZipFile(release/'SIMONAgent-template.zip','w') as z:
   z.writestr('SIMONAgent/SIMONAgent.exe',b'unchanged-binary')
-  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup','machine_single_instance','unique_store_code','machine_bound_identity'],'exe_sha256':hashlib.sha256(b'unchanged-binary').hexdigest()}))
+  z.writestr('agent-build.json',json.dumps({'capabilities':['sentinel_xml','store_code','reenrollment_after_delete','ten_second_metrics','in_place_install','native_user_startup','machine_single_instance','unique_store_code','machine_bound_identity','agent_build_identity'],'exe_sha256':hashlib.sha256(b'unchanged-binary').hexdigest()}))
   z.writestr('install.ps1','old installer')
  installers=tmp_path/'deployment'/'agent';installers.mkdir(parents=True)
  (installers/'install.ps1').write_text('fixed installer')
