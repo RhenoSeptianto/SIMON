@@ -1,5 +1,5 @@
 """Super-admin update API support; worker runs separately via Task Scheduler."""
-import json,os,subprocess,time,uuid
+import json,os,subprocess,time,uuid,hashlib,re
 from pathlib import Path
 from tools.update_worker import BUSY,check_latest,read_json,write_json
 
@@ -18,7 +18,13 @@ def status(data,root):
 def configuration(data,database):
  base=folder(data);config=read_json(base/'config.json')
  if not config or not (base/'worker.py').exists() or not (base/'installed.json').exists():raise UpdateError('Helper update belum dipasang pada server.')
- if Path(config['database']).resolve()!=Path(database).resolve():raise UpdateError('Database server berbeda dari konfigurasi helper. Pasang ulang helper untuk lokasi database yang benar.')
+ configured=config.get('database_id')
+ if configured:
+  if configured!=database:raise UpdateError('Database server berbeda dari konfigurasi helper. Pasang ulang helper untuk database yang benar.')
+ elif re.fullmatch('[0-9a-f]{64}',str(database)):
+  legacy=hashlib.sha256(os.path.normcase(str(Path(config['database']).resolve())).encode()).hexdigest()
+  if legacy!=database:raise UpdateError('Database server berbeda dari konfigurasi helper. Pasang ulang helper untuk lokasi database yang benar.')
+ elif Path(config['database']).resolve()!=Path(database).resolve():raise UpdateError('Database server berbeda dari konfigurasi helper. Pasang ulang helper untuk lokasi database yang benar.')
  return config
 
 def check(data,database):

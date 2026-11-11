@@ -1,6 +1,6 @@
 ﻿# SIMON - Sistem Monitoring
 
-Monitoring hardware PC store dengan agent Windows ringan. Super Admin melihat semua PC dan mengelola assignment; TS hanya melihat PC yang diberikan. Dashboard dan API FastAPI memakai SQLite lokal. Tidak membutuhkan Node, Docker, atau layanan cloud berbayar.
+Monitoring hardware PC store dengan agent Windows ringan. Super Admin melihat semua PC dan mengelola assignment; TS hanya melihat PC yang diberikan. Instalasi kecil dapat memakai SQLite; deployment kantor hingga ratusan store memakai PostgreSQL lokal. Tidak membutuhkan Node, Docker, atau layanan cloud berbayar.
 
 ## Server PC kantor
 
@@ -18,6 +18,8 @@ git clone https://github.com/RhenoSeptianto/SIMON.git simon
 4. Buka **https://172.18.123.92:8443**. Pada instalasi baru, setup meminta password admin (username `admin`) dan password awal 9 akun TS. Database yang sudah ada tidak diubah passwordnya.
 
 Setup memasang Python 3.12 x64 dan dependency server secara otomatis jika runtime atau Python Launcher belum tersedia, memeriksa dependency dan kesehatan backend, serta mencadangkan `.venv` yang tidak valid sebelum membuat ulang. Jika `winget` tidak ada, setup menampilkan petunjuk instalasi manual. PC perlu internet untuk mengunduh komponen. Semua path operasional dihitung relatif dari root proyek `D:\IT\simon`; database, konfigurasi, sertifikat, dan credential tidak dihapus. Server otomatis hidup saat boot melalui Task Scheduler, tanpa perlu login atau terminal terbuka. Matikan sleep PC kantor. Tidak ada jadwal backup harian otomatis. Log: `data\logs\server.log`. Backup manual tersedia di menu Database (Super Admin).
+
+Untuk deployment kantor berskala besar, update SIMON ke versi 1.1.0 dahulu, jalankan `git pull --ff-only origin main` pada checkout server, instal PostgreSQL for Windows, lalu klik kanan `deployment\server\migrate-postgresql.bat` → **Run as administrator**. Script meminta password administrator PostgreSQL, menghentikan server sebentar, membuat backup SQLite, memindahkan seluruh data dalam transaksi, mengaktifkan PostgreSQL, memeriksa HTTPS/database, dan memasang ulang helper UpdateSimon. File SQLite lama tidak dihapus dan agent store tidak perlu dipasang ulang. Panduan: [Migrasi PostgreSQL](docs/POSTGRESQL.md).
 
 **Panduan lengkap:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

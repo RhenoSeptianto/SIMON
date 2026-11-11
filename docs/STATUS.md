@@ -1,14 +1,22 @@
 # Status terbaru
 
+## PostgreSQL untuk skala ratusan store (1.1.0)
+
+Server mendukung PostgreSQL lokal melalui `data/database-url.txt` yang dilindungi ACL SYSTEM/Administrators. Migrasi satu kali membuat backup SQLite, menyalin seluruh tabel dalam transaksi, menyesuaikan sequence, memverifikasi fingerprint database melalui HTTPS, lalu mengonfigurasi ulang Task Scheduler dan UpdateSimon. Agent, URL HTTPS, UUID, kode store dan assignment tidak berubah.
+
+UpdateSimon mendukung backup/rollback PostgreSQL memakai `pg_dump`/`pg_restore`; SQLite tetap didukung untuk development dan instalasi kecil. SQLite transisi memakai WAL, busy timeout 30 detik, dan serialisasi write telemetry. Simulasi lokal 400 heartbeat bersamaan berhasil 400/400 tanpa HTTP 500. Tes otomatis: 80 lulus serta update smoke mempertahankan data/session dan memulihkan schema ketika kandidat gagal.
+
+Batas verifikasi: PostgreSQL tidak terpasang di PC development ini, sehingga instalasi service PostgreSQL, migrasi database kantor nyata, restart Task Scheduler dan backup/restore `pg_dump` nyata harus dipilot di PC server. Script membatalkan migrasi dan mengembalikan action server SQLite bila health check PostgreSQL gagal; SQLite dan backup tidak dihapus.
+
 Role yang didukung hanya super_admin dan ts. Role lain di database dikonversi menjadi ts saat startup, akses PC lama dipertahankan. Super Admin melihat semua PC tanpa assignment; TS perlu assignment langsung. Hanya Super Admin dapat mengelola user, backup dan reset database.
 
 Password minimal satu karakter. Sembilan akun TS yang diminta pengguna sudah dibuat di database lokal. Tidak ada seed password otomatis pada startup.
 
-Menu Database menyediakan download backup SQLite konsisten menggunakan SQLite online backup API. Reset data monitoring memerlukan konfirmasi RESET dan backup otomatis sebelum transaksi penghapusan. Akun/password dan audit dipertahankan. Reset hanya diimplementasikan dan diuji pada database tes, tidak dieksekusi terhadap database pengguna.
+Menu Database menyediakan download backup konsisten untuk SQLite dan PostgreSQL. Reset data monitoring memerlukan konfirmasi RESET dan backup otomatis sebelum transaksi penghapusan. Akun/password dan audit dipertahankan. Reset hanya diimplementasikan dan diuji pada database tes, tidak dieksekusi terhadap database pengguna.
 
-Lima tes integrasi lulus: authentication/CSRF, izin PC, enrollment/telemetry, penghapusan PC, sesi Super Admin, password pendek, role TS, backup yang dapat dibuka SQLite dan reset dengan preservasi akun. Browser otomatis, installer/service Windows, packaging executable serta PostgreSQL belum diuji. Sensor disk yang tak tersedia bernilai null. Alert CPU/RAM sustained dan konfigurasi threshold UI belum tersedia.
+Tes integrasi mencakup authentication/CSRF, izin PC, enrollment/telemetry, penghapusan PC, sesi Super Admin, password pendek, role TS, backup SQLite, reset dengan preservasi akun, konfigurasi PostgreSQL, serta rollback updater. Instalasi PostgreSQL Windows nyata masih memerlukan pilot kantor. Sensor disk yang tak tersedia bernilai null. Alert CPU/RAM sustained dan konfigurasi threshold UI belum tersedia.
 
-Detail alur operasional tersedia pada README. Frontend dilayani langsung FastAPI, database default SQLite, agent Python outbound-only. Tidak memerlukan Node atau Docker.
+Detail alur operasional tersedia pada README. Frontend dilayani langsung FastAPI, database default SQLite untuk development dan PostgreSQL untuk deployment besar, agent outbound-only. Tidak memerlukan Node atau Docker.
 
 Fitur ganti password sendiri tersedia melalui POST /api/me/password dan tombol topbar. Memerlukan autentikasi, header CSRF dan verifikasi password lama, menerima password baru minimal 1 karakter. Seluruh sesi user dicabut setelah berhasil. Tujuh tes lulus termasuk TS/Super Admin, password lama salah, password kosong, CSRF, pencabutan seluruh sesi dan login menggunakan password baru.
 

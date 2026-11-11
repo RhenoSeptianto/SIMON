@@ -205,10 +205,12 @@ Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'pip', 'install', '-r', $
 Invoke-Checked -Exe $venvPythonPath -Arguments @('-m', 'pip', 'check') -FailureMessage 'Pemeriksaan dependency gagal: terdapat dependency yang hilang atau tidak kompatibel.'
 
 $dataPath = Join-Path $rootPath 'data'
+$databaseUrlFile = Join-Path $dataPath 'database-url.txt'
+if (Test-Path -LiteralPath $databaseUrlFile -PathType Leaf) { $env:DATABASE_URL_FILE = $databaseUrlFile }
 $databaseDataPath = $dataPath
 if ($env:SIAMS_DATA) { $databaseDataPath = [IO.Path]::GetFullPath($env:SIAMS_DATA) }
 $defaultDatabasePath = Join-Path $databaseDataPath 'siams.db'
-$databaseInfoCode = 'import os,sys; from pathlib import Path; from sqlalchemy.engine import make_url; raw=os.getenv(sys.argv[1]); url=make_url(raw) if raw else None; backend=url.get_backend_name() if url else sys.argv[2]; path=(url.database if url else sys.argv[3]) or sys.argv[4]; print(backend); print(Path(path).resolve() if path != sys.argv[4] else path)'
+$databaseInfoCode = 'import os,sys; from pathlib import Path; from sqlalchemy.engine import make_url; raw=os.getenv(sys.argv[1]); file=os.getenv("DATABASE_URL_FILE"); raw=Path(file).read_text(encoding="utf-8-sig").strip() if file else raw; url=make_url(raw) if raw else None; backend=url.get_backend_name() if url else sys.argv[2]; path=(url.database if url else sys.argv[3]) or sys.argv[4]; print(backend); print(Path(path).resolve() if backend=="sqlite" and path != sys.argv[4] else path)'
 $databaseInfo = & $venvPythonPath '-c' $databaseInfoCode 'DATABASE_URL' 'sqlite' $defaultDatabasePath ':memory:' 2>&1
 $databaseInfoExitCode = $LASTEXITCODE
 if ($databaseInfoExitCode -ne 0 -or $databaseInfo.Count -lt 2) {
@@ -292,6 +294,7 @@ try {
 }
 
 $expectedPythonPath = [IO.Path]::GetFullPath($venvPythonPath)
+$serverArguments = if ($databaseBackend -like 'postgresql*') { '-m backend.run_server --data "{0}" --database-url-file "{1}"' -f $dataPath, $databaseUrlFile } else { '-m backend.run_server' }
 $taskIsValid = $false
 if ($existingTask) {
     $existingAction = $existingTask.Actions | Select-Object -First 1
@@ -300,7 +303,7 @@ if ($existingTask) {
     if ($existingAction -and $existingTrigger) {
         $taskIsValid = (
             [IO.Path]::GetFullPath($existingAction.Execute.Trim('"')) -eq $expectedPythonPath -and
-            $existingAction.Argument -eq '-m backend.run_server' -and
+            $existingAction.Argument -eq $serverArguments -and
             [IO.Path]::GetFullPath($existingAction.WorkingDirectory) -eq $expectedRoot -and
             $existingTask.Principal.UserId -match '^(SYSTEM|NT AUTHORITY\\SYSTEM|S-1-5-18)$' -and
             $existingTask.State -ne 'Disabled'
@@ -309,7 +312,7 @@ if ($existingTask) {
 }
 
 if (-not $taskIsValid) {
-    $action = New-ScheduledTaskAction -Execute $venvPythonPath -Argument '-m backend.run_server' -WorkingDirectory $rootPath
+    $action = New-ScheduledTaskAction -Execute $venvPythonPath -Argument $serverArguments -WorkingDirectory $rootPath
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName 'SIMONServer' -Action $action -Trigger $trigger -Settings $settings -User 'SYSTEM' -RunLevel Highest -Force -Description 'SIMON HTTPS office server' | Out-Null
@@ -322,7 +325,8 @@ if (-not (Get-NetFirewallRule -Name 'SIMONServerHTTPS' -ErrorAction SilentlyCont
 }
 
 Start-ScheduledTask -TaskName 'SIMONServer' -ErrorAction Stop
-$healthCheck = & $venvPythonPath '-m' 'tools.server_healthcheck' '--ca' $certificatePath '--url' 'https://127.0.0.1:8443/'
+$databaseDescriptor = & $venvPythonPath '-c' 'import json;from backend.database import database_descriptor;print(json.dumps(database_descriptor()))' | ConvertFrom-Json
+$healthCheck = & $venvPythonPath '-m' 'tools.server_healthcheck' '--ca' $certificatePath '--url' 'https://127.0.0.1:8443/api/health' '--expected-kind' $databaseDescriptor.kind '--expected-id' $databaseDescriptor.id
 $healthCheckExitCode = $LASTEXITCODE
 if ($healthCheckExitCode -ne 0) {
     $healthDetails = ($healthCheck | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine

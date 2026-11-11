@@ -1,5 +1,5 @@
 """Standalone updater worker. Copied outside releases; uses only the Python standard library."""
-import argparse,contextlib,hashlib,json,os,re,sqlite3,ssl,subprocess,sys,tarfile,time,urllib.request,uuid
+import argparse,contextlib,hashlib,json,os,re,sqlite3,ssl,subprocess,sys,tarfile,time,urllib.request,urllib.parse,uuid
 from pathlib import Path
 
 BUSY={'queued','preparing','stopping','backup','installing','verifying','rolling_back'}
@@ -51,6 +51,25 @@ def copy_database(source,target):
   src.backup(dst)
   if dst.execute('PRAGMA quick_check').fetchone()[0]!='ok':raise RuntimeError('Pemeriksaan backup database gagal')
 
+def postgres_environment(config):
+ path=Path(config['database_url_file']);raw=path.read_text(encoding='utf-8-sig').strip();parts=urllib.parse.urlsplit(raw.replace('postgresql+psycopg://','postgresql://',1))
+ if parts.scheme not in ('postgresql','postgres'):raise RuntimeError('File koneksi PostgreSQL tidak valid')
+ env=os.environ.copy();env.update(PGHOST=parts.hostname or '127.0.0.1',PGPORT=str(parts.port or 5432),PGDATABASE=(parts.path or '/').lstrip('/'),PGUSER=urllib.parse.unquote(parts.username or ''))
+ if parts.password is not None:env['PGPASSWORD']=urllib.parse.unquote(parts.password)
+ return env
+
+def backup_database(config,folder):
+ folder=Path(folder);folder.mkdir(parents=True,exist_ok=True)
+ if config.get('database_kind','sqlite')=='sqlite':
+  target=folder/'database.db';temporary=folder/'database.tmp';copy_database(config['database'],temporary);temporary.replace(target);return target
+ target=folder/'database.dump';temporary=folder/'database.tmp'
+ command([config['pg_dump'],'--format=custom','--create','--file',str(temporary)],env=postgres_environment(config),timeout=300)
+ temporary.replace(target);return target
+
+def restore_database(config,backup):
+ if config.get('database_kind','sqlite')=='sqlite':copy_database(backup,config['database']);return
+ command([config['pg_restore'],'--clean','--create','--if-exists','--no-owner','--no-privileges','--dbname','postgres',str(backup)],env=postgres_environment(config),timeout=600)
+
 def extract_commit(config,sha,target):
  target=Path(target);target.mkdir(parents=True,exist_ok=False)
  archive=target.parent/(target.name+'.tar')
@@ -91,17 +110,19 @@ class WindowsDriver:
   command([python,'-m','pip','install','--disable-pip-version-check','-r',str(release/'requirements.txt')],cwd=release,timeout=1200)
   command([python,'-m','pip','check'],cwd=release,timeout=90)
   smoke=Path(c['folder'])/'checks'/request['id'];smoke.mkdir(parents=True,exist_ok=True)
-  env={**os.environ,'SIAMS_DATA':str(smoke),'SIAMS_BUILD_SHA':sha};env.pop('DATABASE_URL',None)
+  env={**os.environ,'SIAMS_DATA':str(smoke),'SIAMS_BUILD_SHA':sha};env.pop('DATABASE_URL',None);env.pop('DATABASE_URL_FILE',None)
   code="from fastapi.testclient import TestClient;from backend.main import app;c=TestClient(app);r=c.get('/api/health');assert r.status_code==200 and r.json()['ok'];assert c.get('/api/system/update/status').status_code==401;assert c.get('/static/updates.js').status_code==200"
   command([python,'-c',code],cwd=release,timeout=120,env=env)
-  return {'python':str(python),'root':str(release),'arguments':subprocess.list2cmdline(['-m','backend.run_server','--data',c['data'],'--database',c['database'],'--version',sha])}
+  database_args=['--database-url-file',c['database_url_file']] if c.get('database_kind','sqlite').startswith('postgresql') else ['--database',c['database']]
+  return {'python':str(python),'root':str(release),'arguments':subprocess.list2cmdline(['-m','backend.run_server','--data',c['data'],*database_args,'--version',sha])}
  def healthy(self,sha=None):
   c=self.config;context=ssl.create_default_context(cafile=str(Path(c['data'])/'tls'/'ca.crt'))
   for _ in range(40):
    try:
     with urllib.request.urlopen(c.get('health_url','https://127.0.0.1:8443/api/health'),context=context,timeout=3) as response:payload=json.load(response)
-    database_id=hashlib.sha256(os.path.normcase(str(Path(c['database']).resolve())).encode()).hexdigest()
-    if payload.get('ok') and payload.get('database_kind')=='sqlite' and payload.get('database_id')==database_id and (sha is None or payload.get('version')==sha):return
+    database_id=c.get('database_id') or hashlib.sha256(os.path.normcase(str(Path(c['database']).resolve())).encode()).hexdigest()
+    database_kind=c.get('database_kind','sqlite')
+    if payload.get('ok') and payload.get('database_kind')==database_kind and payload.get('database_id')==database_id and (sha is None or payload.get('version')==sha):return
    except Exception:pass
    time.sleep(1)
   raise RuntimeError('SIMON tidak lolos pemeriksaan HTTPS/versi setelah dinyalakan')
@@ -119,7 +140,7 @@ class Job:
   self.status('rolling_back','Update gagal. Memulihkan versi sebelumnya.',error=str(cause))
   try:
    driver.stop()
-   if journal.get('backup') and Path(journal['backup']).is_file():copy_database(journal['backup'],self.config['database'])
+   if journal.get('backup') and Path(journal['backup']).is_file():restore_database(self.config,journal['backup'])
    driver.configure(journal['previous_action']);driver.start();driver.healthy(journal.get('previous_sha'))
    write_json(self.folder/'current.json',journal['previous_current'])
    journal.update(phase='complete',outcome='rolled_back',error=str(cause));write_json(self.folder/'journal.json',journal)
@@ -141,9 +162,8 @@ class Job:
    self.status('stopping','Menghentikan server sementara untuk backup dan pemasangan.')
    driver.stop()
    self.status('backup','Membuat backup database sebelum perubahan.')
-   backup=self.folder/'backups'/request['id'];backup.mkdir(parents=True,exist_ok=True)
-   temporary=backup/'database.tmp';copy_database(self.config['database'],temporary);temporary.replace(backup/'database.db')
-   journal.update(backup=str(backup/'database.db'),phase='installing');write_json(self.folder/'journal.json',journal)
+   backup=backup_database(self.config,self.folder/'backups'/request['id'])
+   journal.update(backup=str(backup),phase='installing');write_json(self.folder/'journal.json',journal)
    self.status('installing','Memasang dan menjalankan versi baru.')
    driver.configure(action);driver.start()
    self.status('verifying','Memeriksa server dan versi baru lewat HTTPS.')

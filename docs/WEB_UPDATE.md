@@ -25,7 +25,7 @@ Tidak perlu build atau memasang ulang agent untuk memasang fitur update web. Jan
 
 Server memeriksa SHA source harus sama dengan versi server, capability manifest, checksum EXE, ukuran dan struktur ZIP. Setelah lolos, server menambahkan installer terbaru dari source yang sedang berjalan serta `ca.crt` publik kantor. Paket tidak mengambil database, private key TLS, config, credential/UUID, state, log, atau XML dari PC server/store. Pemasangan di PC store tetap manual dan identitas PC dibuat oleh installer.
 
-Untuk lokasi data nonstandar, gunakan parameter `-DataPath` pada setup-updater.ps1. Database harus SQLite bernama siams.db pada lokasi data tersebut dan harus cocok dengan database server aktif. PostgreSQL/lokasi database yang tidak cocok akan ditolak, bukan diam-diam direset.
+Untuk lokasi data nonstandar, gunakan parameter `-DataPath` pada setup-updater.ps1. Helper mendukung SQLite serta PostgreSQL yang dipasang lewat prosedur resmi SIMON. Fingerprint database aktif harus cocok dengan konfigurasi helper; database yang berbeda ditolak, bukan diam-diam direset.
 
 ## Pembaruan berikutnya
 
@@ -42,7 +42,7 @@ Sebelum tombol update digunakan, Git harus bersih dari perubahan source lokal. U
 - Bahkan aplikasi awal dibuatkan snapshot source. Versi baru diekstrak dari SHA Git yang telah diperiksa ke folder release tersendiri, dengan virtual environment Python sendiri. Versi lama tetap ada.
 - Sebelum mematikan server, helper memasang dependensi dan menguji versi baru memakai database sementara yang terpisah. Versi lama masih melayani pengguna selama persiapan ini.
 - Pada fase pemasangan, API perubahan data dan kiriman agent ditahan dengan HTTP 503. Status update, identitas sesi dan health check tetap dapat dibaca. Agent akan mencoba mengirim kembali; status perangkat dapat sementara Offline.
-- Server dihentikan, backup SQLite dibuat lewat API backup SQLite dan diperiksa, lalu task server diarahkan ke versi baru dengan lokasi data/database absolut yang sama.
+- Server dihentikan, backup konsisten dibuat (`sqlite3 backup` untuk SQLite atau `pg_dump` untuk PostgreSQL), lalu task server diarahkan ke versi baru dengan lokasi data/database yang sama.
 - Pemeriksaan HTTPS memverifikasi CA, akses database dan SHA versi baru. Keberhasilan proses saja tidak dianggap cukup.
 - Jika pemasangan/migrasi/health check gagal, helper menghentikan versi gagal, memulihkan database dan task/environment versi sebelumnya, lalu memeriksa HTTPS versi lama. Akses perubahan data baru dibuka setelah pemulihan berhasil.
 - Jika rollback juga gagal, status menjadi **Pemulihan perlu diperiksa**, log berisi penyebab, dan maintenance tetap aktif. Sistem tidak mengklaim update berhasil. Setelah penyebab diperbaiki admin dapat menjalankan task SIMONUpdater lagi untuk mencoba pemulihan jurnal.
@@ -57,7 +57,7 @@ Jangan menghapus `data/updater`, virtual environment awal, folder release atau b
 - `data/updater/update.log`: tahap dan hasil update; tersedia lewat dashboard Super Admin.
 - `data/updater/status.json`: status terakhir.
 - `data/updater/journal.json`: konfigurasi versi sebelum update dan backup untuk rollback.
-- `data/updater/backups/<job>/database.db`: backup sebelum pemasangan.
+- `data/updater/backups/<job>/database.db` atau `database.dump`: backup sebelum pemasangan.
 - `data/logs/server.log`: log server.
 
 Jika rollback belum berhasil, jangan reset database. Periksa log/izin/disk terlebih dahulu. Setelah penyebab diperbaiki, jalankan PowerShell sebagai Administrator:

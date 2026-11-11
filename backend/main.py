@@ -1,20 +1,22 @@
-import os, json, secrets, hashlib, hmac, time, io
+import os, json, secrets, hashlib, hmac, time, io, threading, contextlib, subprocess
 from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Text, UniqueConstraint, inspect, text, func
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Text, UniqueConstraint, inspect, text, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from backend.localization import localize_metrics
+from backend.database import make_engine,database_descriptor
 
 ROOT=Path(__file__).resolve().parents[1]
 APP_VERSION=(ROOT/'VERSION').read_text(encoding='utf-8-sig').strip() if (ROOT/'VERSION').exists() else '0.1.0'
 DATA=Path(os.getenv('SIAMS_DATA',str(ROOT/'data'))); DATA.mkdir(parents=True,exist_ok=True)
-engine=create_engine(os.getenv('DATABASE_URL','sqlite:///'+str(DATA/'siams.db')), **({'connect_args':{'check_same_thread':False}} if not os.getenv('DATABASE_URL') else {}))
+engine=make_engine()
 DB=sessionmaker(bind=engine); Base=declarative_base()
+REPORT_WRITE_LOCK=threading.RLock()
 def now(): return time.time()
 class User(Base):
  __tablename__='users'
@@ -299,6 +301,10 @@ class Telemetry(BaseModel):
  event_id:str=Field(max_length=80); collected_at:float; kind:str; payload:dict
 @app.post('/api/agent/report')
 def report(v:Telemetry,d=Depends(agent),s:Session=Depends(db)):
+ lock=REPORT_WRITE_LOCK if engine.dialect.name=='sqlite' else contextlib.nullcontext()
+ with lock:return process_report(v,d,s)
+
+def process_report(v,d,s):
  global _last_telemetry_cleanup
  if v.kind not in ('heartbeat','inventory','metrics','storage'): raise HTTPException(422)
  if len(json.dumps(v.payload))>200000: raise HTTPException(413)
@@ -385,15 +391,22 @@ def super_admin(u=Depends(user)):
  return u
 
 def database_backup():
- import sqlite3
- if engine.dialect.name!='sqlite': raise HTTPException(501,'Backup ini khusus database SQLite')
  folder=DATA/'backups'; folder.mkdir(exist_ok=True)
- target=folder/('simon-'+time.strftime('%Y%m%d-%H%M%S')+'-'+secrets.token_hex(4)+'.db')
- connection=engine.raw_connection()
- try:
-  with sqlite3.connect(target) as dest: connection.driver_connection.backup(dest)
- finally: connection.close()
- return target
+ stamp=time.strftime('%Y%m%d-%H%M%S')+'-'+secrets.token_hex(4)
+ if engine.dialect.name=='sqlite':
+  import sqlite3
+  target=folder/('simon-'+stamp+'.db');connection=engine.raw_connection()
+  try:
+   with sqlite3.connect(target) as dest: connection.driver_connection.backup(dest)
+  finally:connection.close()
+  return target
+ if engine.dialect.name.startswith('postgresql'):
+  from tools.postgres_tools import find_program,postgres_env
+  target=folder/('simon-'+stamp+'.dump');program=find_program('pg_dump')
+  result=subprocess.run([program,'--format=custom','--create','--file',str(target)],env=postgres_env(engine.url),capture_output=True,text=True,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+  if result.returncode:raise HTTPException(500,'Backup PostgreSQL gagal: '+(result.stderr or result.stdout)[-1000:])
+  return target
+ raise HTTPException(501,'Jenis database belum mendukung backup')
 
 @app.post('/api/database/backup')
 def backup_database(u=Depends(super_admin),s:Session=Depends(db)):
@@ -423,12 +436,11 @@ async def maintenance_gate(request,call_next):
 @app.get('/api/health')
 def system_health(s:Session=Depends(db)):
  for model in (User,Device,Sample,LoginSession,Alert,UserDeviceAccess,Audit):s.query(model).limit(1).all()
- database_id=hashlib.sha256(os.path.normcase(str(Path(engine.url.database).resolve())).encode()).hexdigest() if engine.dialect.name=='sqlite' and engine.url.database not in (None,':memory:') else None
- return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'database_kind':engine.dialect.name,'database_id':database_id}
+ descriptor=database_descriptor(str(engine.url))
+ return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'database_kind':descriptor['kind'],'database_id':descriptor['id']}
 
 def updater_database():
- if engine.dialect.name!='sqlite':raise HTTPException(409,'Update otomatis saat ini mendukung database SQLite saja.')
- return str(Path(engine.url.database).resolve())
+ return database_descriptor(str(engine.url))['id']
 
 @app.get('/api/system/update/status')
 def update_status(u=Depends(super_admin)):

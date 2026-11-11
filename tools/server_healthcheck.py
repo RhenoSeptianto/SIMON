@@ -2,7 +2,7 @@
 import argparse,ssl,time,urllib.request,json,hashlib,os
 from pathlib import Path
 
-def check_https(ca,url,attempts=20,delay=1,timeout=2,expected_version=None,expected_database=None):
+def check_https(ca,url,attempts=20,delay=1,timeout=2,expected_version=None,expected_database=None,expected_kind=None,expected_id=None):
     try: context=ssl.create_default_context(cafile=ca)
     except (OSError,ssl.SSLError) as error:
         print(f'HEALTH_CHECK_FAILED: CA {ca}: {type(error).__name__}: {error}',flush=True)
@@ -11,10 +11,12 @@ def check_https(ca,url,attempts=20,delay=1,timeout=2,expected_version=None,expec
         try:
             with urllib.request.urlopen(url,context=context,timeout=timeout) as response:
                 if response.status!=200:raise RuntimeError(f'HTTP {response.status}')
-                if expected_version is not None or expected_database is not None:
+                if any(value is not None for value in (expected_version,expected_database,expected_kind,expected_id)):
                     payload=json.load(response)
                     if not payload.get('ok'):raise RuntimeError('Server belum siap')
                     if expected_version is not None and payload.get('version')!=expected_version:raise RuntimeError('Versi server tidak sesuai snapshot yang dipasang')
+                    if expected_kind is not None and payload.get('database_kind')!=expected_kind:raise RuntimeError('Jenis database server tidak sesuai')
+                    if expected_id is not None and payload.get('database_id')!=expected_id:raise RuntimeError('Identitas database server tidak sesuai')
                     if expected_database is not None:
                         identifier=hashlib.sha256(os.path.normcase(str(Path(expected_database).resolve())).encode()).hexdigest()
                         if payload.get('database_kind')!='sqlite' or payload.get('database_id')!=identifier:raise RuntimeError('Database server aktif berbeda dari database helper. Konfigurasi server tidak diubah.')
@@ -28,6 +30,6 @@ def check_https(ca,url,attempts=20,delay=1,timeout=2,expected_version=None,expec
     return 1
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--ca',required=True);parser.add_argument('--url',required=True);parser.add_argument('--expected-version');parser.add_argument('--expected-database')
+    parser=argparse.ArgumentParser();parser.add_argument('--ca',required=True);parser.add_argument('--url',required=True);parser.add_argument('--expected-version');parser.add_argument('--expected-database');parser.add_argument('--expected-kind');parser.add_argument('--expected-id')
     args=parser.parse_args()
-    raise SystemExit(check_https(args.ca,args.url,expected_version=args.expected_version,expected_database=args.expected_database))
+    raise SystemExit(check_https(args.ca,args.url,expected_version=args.expected_version,expected_database=args.expected_database,expected_kind=args.expected_kind,expected_id=args.expected_id))

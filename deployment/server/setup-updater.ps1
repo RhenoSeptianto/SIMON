@@ -14,6 +14,16 @@ $action=$serverTask.Actions | Select-Object -First 1
 if($serverTask.Principal.UserId -notin @('SYSTEM','NT AUTHORITY\SYSTEM','S-1-5-18')){throw 'Task SIMONServer harus berjalan sebagai SYSTEM. Gunakan konfigurasi setup-server.bat sebelum memasang helper.'}
 $taskState=Join-Path $folder 'setup-task.json'
 @{python=$action.Execute;root=$action.WorkingDirectory;arguments=$action.Arguments} | ConvertTo-Json | Set-Content -LiteralPath $taskState -Encoding UTF8
+$databaseUrlFile=Join-Path $DataPath 'database-url.txt'
+$databaseKind='sqlite';$databaseId=''
+if(Test-Path -LiteralPath $databaseUrlFile -PathType Leaf){
+ $descriptor=& $python -c "import json,sys;from backend.database import database_descriptor;print(json.dumps(database_descriptor(open(sys.argv[1],encoding='utf-8-sig').read().strip())))" $databaseUrlFile | ConvertFrom-Json
+ $databaseKind=$descriptor.kind;$databaseId=$descriptor.id
+} else {
+ $databasePath=Join-Path $DataPath 'siams.db'
+ $descriptor=& $python -c "import json,sys;from backend.database import database_descriptor;print(json.dumps(database_descriptor('sqlite:///'+sys.argv[1])))" $databasePath | ConvertFrom-Json
+ $databaseId=$descriptor.id
+}
 $serverTransition=$false
 Push-Location -LiteralPath $rootPath
 try {
@@ -24,9 +34,11 @@ try {
   if((Get-ScheduledTask -TaskName SIMONServer).State -in @('Running','Queued')){Stop-ScheduledTask -TaskName SIMONServer;Start-Sleep -Seconds 2}
   Start-ScheduledTask -TaskName SIMONServer
  }
- & $python -m tools.server_healthcheck --ca (Join-Path $DataPath 'tls\ca.crt') --url 'https://127.0.0.1:8443/api/health' --expected-database (Join-Path $DataPath 'siams.db')
+ & $python -m tools.server_healthcheck --ca (Join-Path $DataPath 'tls\ca.crt') --url 'https://127.0.0.1:8443/api/health' --expected-kind $databaseKind --expected-id $databaseId
  if($LASTEXITCODE -ne 0){throw 'Database aktif tidak cocok atau health endpoint belum siap. Database dan konfigurasi task lama dipertahankan.'}
- & $python -m tools.setup_updater --root $rootPath --data $DataPath --git $GitPath --task-state $taskState
+ $setupArguments=@('-m','tools.setup_updater','--root',$rootPath,'--data',$DataPath,'--git',$GitPath,'--task-state',$taskState)
+ if($databaseKind -like 'postgresql*'){$setupArguments+=@('--database-url-file',$databaseUrlFile)}
+ & $python @setupArguments
  if($LASTEXITCODE -ne 0){throw 'Pemasangan helper gagal. Baca pesan di atas.'}
  $updaterAction=New-ScheduledTaskAction -Execute $python -Argument ('"{0}" --config "{1}"' -f (Join-Path $folder 'worker.py'),(Join-Path $folder 'config.json')) -WorkingDirectory $rootPath
  $trigger=New-ScheduledTaskTrigger -AtStartup
@@ -48,7 +60,7 @@ try {
  $serverAction=New-ScheduledTaskAction -Execute $current.python -Argument $current.arguments -WorkingDirectory $current.root
  Set-ScheduledTask -TaskName SIMONServer -Action $serverAction | Out-Null
  if(-not $SkipRestart){Start-ScheduledTask -TaskName SIMONServer}
- & $python -m tools.server_healthcheck --ca (Join-Path $DataPath 'tls\ca.crt') --url 'https://127.0.0.1:8443/api/health' --expected-version $current.sha --expected-database (Join-Path $DataPath 'siams.db')
+ & $python -m tools.server_healthcheck --ca (Join-Path $DataPath 'tls\ca.crt') --url 'https://127.0.0.1:8443/api/health' --expected-version $current.sha --expected-kind $databaseKind --expected-id $databaseId
  if($LASTEXITCODE -ne 0){throw 'Helper terpasang, tetapi server belum lolos health check. Periksa data\logs\server.log.'}
  @{task='SIMONUpdater';installed_at=(Get-Date -Format s)} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $folder 'installed.json') -Encoding UTF8
  $serverTransition=$false

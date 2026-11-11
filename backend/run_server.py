@@ -14,10 +14,11 @@ class RoutineTelemetryFilter(logging.Filter):
 def main():
  os.environ['SIAMS_PRODUCTION']='1'
  import argparse
- parser=argparse.ArgumentParser();parser.add_argument('--data');parser.add_argument('--version');parser.add_argument('--database');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--data');parser.add_argument('--version');parser.add_argument('--database');parser.add_argument('--database-url-file');args=parser.parse_args()
  if args.data:os.environ['SIAMS_DATA']=str(Path(args.data).resolve())
  if args.version:os.environ['SIAMS_BUILD_SHA']=args.version
  if args.database:os.environ['DATABASE_URL']='sqlite:///'+str(Path(args.database).resolve())
+ if args.database_url_file:os.environ['DATABASE_URL_FILE']=str(Path(args.database_url_file).resolve())
  import uvicorn
  data=Path(os.getenv('SIAMS_DATA',str(ROOT/'data')))
  tls=data/'tls'
