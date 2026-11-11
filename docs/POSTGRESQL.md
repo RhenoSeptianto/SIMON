@@ -4,7 +4,7 @@ PostgreSQL direkomendasikan untuk server kantor dengan ratusan agent. Migrasi ha
 
 ## Persiapan
 
-1. Update SIMON ke versi 1.1.0 melalui UpdateSimon saat server masih memakai SQLite.
+1. Update SIMON ke versi 1.1.1 melalui UpdateSimon saat server masih memakai SQLite.
 2. Pastikan menu dan agent kembali normal setelah update.
 3. Sinkronkan checkout operasional karena UpdateSimon menjalankan snapshot release tanpa menimpa folder Git: `git pull --ff-only origin main` dari folder repo server.
 4. Instal PostgreSQL for Windows pada PC server. Pertahankan port lokal default `5432` dan ingat password user administrator `postgres`.

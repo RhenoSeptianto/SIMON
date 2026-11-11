@@ -8,6 +8,12 @@ def test_postgresql_identity_hides_password_and_stays_stable():
  assert first['kind']=='postgresql' and first['id']==second['id']
  assert 'secret' not in first['label'] and first['label']=='127.0.0.1:5432/simon'
 
+def test_role_password_ddl_is_safely_quoted_without_bind_placeholder():
+ from tools.migrate_postgresql import role_password_query
+ statement=role_password_query('CREATE ROLE','simon_app',"p'ass").as_string()
+ assert statement=='CREATE ROLE "simon_app" WITH LOGIN CREATEDB PASSWORD \'p\'\'ass\''
+ assert '$1' not in statement and '%s' not in statement
+
 def test_postgresql_worker_uses_dump_and_restore_without_password_in_arguments(tmp_path,monkeypatch):
  import tools.update_worker as updater
  url=tmp_path/'database-url.txt';url.write_text('postgresql+psycopg://simon:p%40ss@127.0.0.1:5432/simon')

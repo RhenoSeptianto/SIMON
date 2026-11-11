@@ -12,12 +12,16 @@ def sqlite_backup(source,target):
   src.backup(dst)
   if dst.execute('PRAGMA quick_check').fetchone()[0]!='ok':raise RuntimeError('Backup SQLite tidak lolos quick_check')
 
+def role_password_query(verb,role,password):
+ if verb not in ('CREATE ROLE','ALTER ROLE'):raise ValueError('Operasi role tidak valid')
+ return sql.SQL('{} {} WITH LOGIN CREATEDB PASSWORD {}').format(sql.SQL(verb),sql.Identifier(role),sql.Literal(password))
+
 def prepare_database(host,port,admin_user,admin_password,role,database,app_password,allow_replace=False):
  with psycopg.connect(host=host,port=port,user=admin_user,password=admin_password,dbname='postgres',autocommit=True) as connection:
   with connection.cursor() as cursor:
    cursor.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(role,))
-   if cursor.fetchone():cursor.execute(sql.SQL('ALTER ROLE {} WITH LOGIN CREATEDB PASSWORD %s').format(sql.Identifier(role)),(app_password,))
-   else:cursor.execute(sql.SQL('CREATE ROLE {} WITH LOGIN CREATEDB PASSWORD %s').format(sql.Identifier(role)),(app_password,))
+   verb='ALTER ROLE' if cursor.fetchone() else 'CREATE ROLE'
+   cursor.execute(role_password_query(verb,role,app_password))
    cursor.execute('SELECT 1 FROM pg_database WHERE datname=%s',(database,));exists=bool(cursor.fetchone())
    if exists and not allow_replace:
     with psycopg.connect(host=host,port=port,user=admin_user,password=admin_password,dbname=database) as target_check:
