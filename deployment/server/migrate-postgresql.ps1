@@ -26,7 +26,9 @@ try{
  Write-Host '[3/6] Seluruh data berhasil dipindahkan ke PostgreSQL.'
  & icacls.exe $urlFile /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' /Q | Out-Null
  if($LASTEXITCODE -ne 0){throw 'Gagal melindungi file kredensial database.'}
- $arguments='-m backend.run_server --data "'+$data+'" --database-url-file "'+$urlFile+'"'
+ $currentFile=Join-Path $data 'updater\current.json';$versionArgument=''
+ if(Test-Path -LiteralPath $currentFile -PathType Leaf){$currentVersion=(Get-Content -LiteralPath $currentFile -Raw | ConvertFrom-Json).sha;if($currentVersion){$versionArgument=' --version "'+$currentVersion+'"'}}
+ $arguments='-m backend.run_server --data "'+$data+'" --database-url-file "'+$urlFile+'"'+$versionArgument
  $newAction=New-ScheduledTaskAction -Execute $oldAction.Execute -Argument $arguments -WorkingDirectory $oldAction.WorkingDirectory
  Set-ScheduledTask -TaskName SIMONServer -Action $newAction | Out-Null
  Start-ScheduledTask -TaskName SIMONServer

@@ -36,7 +36,10 @@ def install(root,data,git_path,task_state,database_url_file=None):
   arguments=subprocess.list2cmdline(['-m','backend.run_server','--data',str(data),*database_args,'--version',sha])
   write_json(folder/'current.json',{'sha':sha,'health_sha':sha,'root':str(baseline),'python':sys.executable,'arguments':arguments})
  else:
-  current=read_json(folder/'current.json');current.update(root=state.get('root',current.get('root')),python=state.get('python',current.get('python')),arguments=state.get('arguments',current.get('arguments')));write_json(folder/'current.json',current)
+  current=read_json(folder/'current.json')
+  database_args=['--database-url-file',str(database_url_file)] if database_url_file else ['--database',str(data/'siams.db')]
+  arguments=subprocess.list2cmdline(['-m','backend.run_server','--data',str(data),*database_args,'--version',current['sha']])
+  current.update(root=state.get('root',current.get('root')),python=state.get('python',current.get('python')),arguments=arguments);write_json(folder/'current.json',current)
  print('Helper siap:',folder)
 
 if __name__=='__main__':
