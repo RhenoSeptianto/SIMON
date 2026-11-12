@@ -19,3 +19,33 @@ dialog.device-dialog{width:min(960px,94vw);max-width:960px;height:min(820px,92dv
 .ts-name-list{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:90px}.ts-name-list span{display:inline-block;padding:3px 7px;border:1px solid var(--line);border-radius:5px;background:var(--soft);color:var(--accent);font-size:10px;white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.update-spinner{animation:none}}
 .agent-badge{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:20px;padding:4px 9px;font-size:10px;white-space:nowrap}.agent-current{color:#16805d;background:#e8f7ee}.agent-outdated{color:#a66d10;background:#fff6dc}.agent-unknown{color:var(--muted);background:var(--hover)}.dark .agent-current{color:#89d8b1;background:#193b34}.dark .agent-outdated{color:#e8bf62;background:#3d3524}.device-head-actions>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}.device-meta{display:flex;gap:10px;flex-wrap:wrap;padding:0 28px 14px;color:var(--muted);font-size:11px}.device-meta span{padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:var(--hover)}.device-meta b{color:inherit;margin-right:5px}.inventory-notice{border:1px solid #d9a44155;border-left:3px solid #d9a441;border-radius:9px;background:#fff9e8;padding:13px 15px;margin:0 0 18px}.inventory-notice b{font-size:12px}.inventory-notice p{font-size:11px;margin:4px 0 0}.dark .inventory-notice{background:#3a3222}.toast-stack{position:fixed;right:22px;bottom:22px;z-index:100;display:flex;flex-direction:column;gap:8px;pointer-events:none}.toast-message{max-width:360px;padding:11px 14px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;background:var(--panel);box-shadow:0 12px 35px #0002;font-size:12px}.toast-message.error{border-left-color:#cf535a}@media(max-width:650px){.device-meta{padding-left:18px;padding-right:18px}.device-head-actions>div{display:none}.toast-stack{left:16px;right:16px;bottom:16px}.toast-message{max-width:none}}
+
+/* === SERVER STATUS PANEL === */
+.sidebar-server-dot { transition: background .4s, box-shadow .4s; }
+.server-dot-ok { background: #49bb95; box-shadow: 0 0 0 4px #49bb9520; }
+.server-dot-warn { background: #e8b23c; box-shadow: 0 0 0 4px #e8b23c20; }
+.server-dot-error { background: #d9363e; box-shadow: 0 0 0 4px #d9363e20; animation: srv-pulse 1.4s ease-in-out infinite; }
+.server-dot-unknown { background: #708196; box-shadow: none; }
+@keyframes srv-pulse { 0%,100% { box-shadow: 0 0 0 4px #d9363e20; } 50% { box-shadow: 0 0 0 7px #d9363e30; } }
+
+.srv-status-card { max-width: 680px; }
+.srv-status-badge { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.srv-status-badge i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; flex-shrink: 0; }
+.srv-status-badge.server-dot-ok { color: #16805d; background: #e8f7ee; border-color: #38957725; }
+.srv-status-badge.server-dot-warn { color: #a66d10; background: #fff9e8; border-color: #d9a44140; }
+.srv-status-badge.server-dot-error { color: #c03b3b; background: #fdf2f2; border-color: #d9363e30; }
+.srv-status-badge.server-dot-unknown { color: var(--muted); background: var(--hover); }
+
+.dark .srv-status-badge.server-dot-ok { color: #89d8b1; background: #193b34; border-color: #2e5c48; }
+.dark .srv-status-badge.server-dot-warn { color: #e8bf62; background: #3d3524; border-color: #61513b; }
+.dark .srv-status-badge.server-dot-error { color: #ff7b82; background: #3a1e20; border-color: #7a2a2e; }
+
+.srv-stat-grid { display: flex; flex-direction: column; gap: 0; margin: 4px 0 16px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.srv-stat-row { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 11px 16px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.srv-stat-row:last-child { border-bottom: 0; }
+.srv-stat-row span { color: var(--muted); flex-shrink: 0; }
+.srv-stat-row b { font-weight: 600; text-align: right; }
+.srv-db-label { font-size: 11px; font-family: monospace; font-weight: 400; color: var(--muted); display: block; margin-top: 2px; word-break: break-all; }
+.srv-latency-warn { color: #a66d10; }
+.dark .srv-latency-warn { color: #e8bf62; }
+.srv-status-actions { display: flex; gap: 10px; }

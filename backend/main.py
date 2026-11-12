@@ -179,13 +179,61 @@ def assigned_ts(s,device_ids):
   for access,owner in s.query(UserDeviceAccess,User).join(User,User.id==UserDeviceAccess.user_id).filter(UserDeviceAccess.device_id.in_(result.keys()),User.role=='ts').order_by(User.name).all():result[access.device_id].append(owner.name)
  return result
 
+def needs_attention(row):
+ metrics=row.get('metrics') or {};disks=metrics.get('disks') or [];volumes=metrics.get('volumes') or []
+ health=[float(d['health_percent']) for d in disks if d.get('source')=='sentinel' and d.get('health_percent') not in (None,'')]
+ stale=metrics.get('storage_source')=='sentinel' and metrics.get('sentinel_status') not in (None,'fresh')
+ hot=any(float(d.get('temperature_c') or 0)>65 for d in disks)
+ low_space=any(float(v.get('free_percent',100 if v.get('used_percent') is None else 100-float(v['used_percent'])))<10 for v in volumes)
+ return not row['online'] or bool(health and min(health)<float(os.getenv('SENTINEL_HEALTH_WARNING','80'))) or stale or hot or low_space
+
+def device_priority(row):
+ metrics=row.get('metrics') or {};disks=metrics.get('disks') or []
+ health=[float(d['health_percent']) for d in disks if d.get('source')=='sentinel' and d.get('health_percent') not in (None,'')]
+ critical=bool(health and min(health)<float(os.getenv('SENTINEL_HEALTH_WARNING','80')))
+ hot=any(float(d.get('temperature_c') or 0)>65 for d in disks)
+ stale=metrics.get('storage_source')=='sentinel' and metrics.get('sentinel_status') not in (None,'fresh')
+ if critical:return (0,min(health),row['id'])
+ if hot:return (1,0,row['id'])
+ if not row['online']:return (2,row.get('last_seen') or 0,row['id'])
+ if stale:return (3,0,row['id'])
+ if row['agent']['status']!='current':return (4,0,row['id'])
+ return (5,0,-row['id'])
+
 @app.get('/api/devices')
-def devices(q:str='',store_id:int|None=None,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
- models=[d for d in visible(s,u) if q.lower() in (d.hostname+' '+(d.ip or '')+' '+d.store_code).lower() and (store_id is None or d.store_id==store_id)]
- assigned=assigned_ts(s,[d.id for d in models])
- rows=[{**serialize(d),'ts_names':assigned[d.id]} for d in models]
- size=max(1,min(limit_,200)); start=(max(page,1)-1)*size
- return {'total':len(rows),'items':rows[start:start+size]}
+def devices(q:str='',store_id:int|None=None,online:int|None=None,attention:int|None=None,agent_state:str='',priority:bool=True,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
+ models=visible(s,u);assigned=assigned_ts(s,[d.id for d in models]);all_rows=[{**serialize(d),'ts_names':assigned[d.id]} for d in models]
+ facets={'all':len(all_rows),'online':sum(d['online'] for d in all_rows),'offline':sum(not d['online'] for d in all_rows),'attention':sum(needs_attention(d) for d in all_rows),'agent_old':sum(d['agent']['status']!='current' for d in all_rows)}
+ query=q.strip().casefold();rows=[]
+ for row in all_rows:
+  haystack=' '.join((row.get('hostname') or '',row.get('ip') or '',row.get('store_code') or '',*row.get('ts_names',[]))).casefold()
+  if query not in haystack or (store_id is not None and row['store_id']!=store_id):continue
+  if online is not None and row['online']!=(online==1):continue
+  if attention is not None and needs_attention(row)!=(attention==1):continue
+  if agent_state=='old' and row['agent']['status']=='current':continue
+  rows.append(row)
+ if priority:rows.sort(key=device_priority)
+ size=max(1,min(limit_,500)); start=(max(page,1)-1)*size
+ return {'total':len(rows),'items':rows[start:start+size],'facets':facets}
+
+class BulkDeviceAssignments(BaseModel):
+ device_ids:list[int]=Field(min_length=1,max_length=500)
+ user_id:int
+ mode:str='replace'
+
+@app.put('/api/devices/assignments/bulk')
+def bulk_device_assignments(v:BulkDeviceAssignments,u=Depends(admin),s:Session=Depends(db)):
+ ids=set(v.device_ids)
+ if v.mode not in ('add','replace'):raise HTTPException(422,'Mode assignment tidak valid')
+ target=s.get(User,v.user_id)
+ if not target or target.role!='ts' or not target.active:raise HTTPException(422,'Pilih user TS aktif yang valid')
+ found={d.id for d in s.query(Device).filter(Device.id.in_(ids)).all()}
+ if found!=ids:raise HTTPException(422,'Ada perangkat yang tidak valid')
+ if v.mode=='replace':s.query(UserDeviceAccess).filter(UserDeviceAccess.device_id.in_(ids)).delete(synchronize_session=False)
+ existing={x.device_id for x in s.query(UserDeviceAccess).filter(UserDeviceAccess.user_id==target.id,UserDeviceAccess.device_id.in_(ids)).all()}
+ for device_id in ids-existing:s.add(UserDeviceAccess(user_id=target.id,device_id=device_id))
+ audit(s,u.id,'bulk_assign_devices',json.dumps({'device_ids':sorted(ids),'user_id':target.id,'mode':v.mode}));s.commit()
+ return {'ok':True,'updated':len(ids),'user_id':target.id,'mode':v.mode}
 @app.get('/api/devices/{id}')
 def detail(id:int,u=Depends(user),s:Session=Depends(db)):
  d=device(s,id,u);return {**serialize(d),'ts_names':assigned_ts(s,[d.id])[d.id]}
@@ -377,7 +425,8 @@ def summary(after_alert_id:int=0,u=Depends(user),s:Session=Depends(db)):
  active_alerts=s.query(Alert).filter(Alert.device_id.in_(ids),Alert.status!='resolved').count() if ids else 0
  new_alerts=s.query(Alert).filter(Alert.device_id.in_(ids),Alert.status!='resolved',Alert.id>after_alert_id).count() if ids else 0
  latest_alert_id=s.query(func.max(Alert.id)).filter(Alert.device_id.in_(ids)).scalar() if ids else 0
- return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(not s.query(UserDeviceAccess).filter_by(device_id=d['id']).first() for d in ds),'active_alerts':active_alerts,'new_alerts':new_alerts,'latest_alert_id':latest_alert_id or 0}
+ assigned_ids={x[0] for x in s.query(UserDeviceAccess.device_id).filter(UserDeviceAccess.device_id.in_(ids)).all()} if ids else set()
+ return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(d['id'] not in assigned_ids for d in ds),'attention':sum(needs_attention(d) for d in ds),'agent_old':sum(d['agent']['status']!='current' for d in ds),'database_kind':engine.dialect.name,'last_report_at':max((d['last_seen'] for d in ds),default=0),'active_alerts':active_alerts,'new_alerts':new_alerts,'latest_alert_id':latest_alert_id or 0}
 @app.get('/api/reports/{format}')
 def export(format:str,u=Depends(user),s:Session=Depends(db)):
  if format!='xlsx':raise HTTPException(404,'Laporan hanya tersedia dalam format Excel (.xlsx)')
@@ -435,9 +484,18 @@ async def maintenance_gate(request,call_next):
 
 @app.get('/api/health')
 def system_health(s:Session=Depends(db)):
+ t0=time.monotonic()
  for model in (User,Device,Sample,LoginSession,Alert,UserDeviceAccess,Audit):s.query(model).limit(1).all()
+ db_latency_ms=round((time.monotonic()-t0)*1000,1)
  descriptor=database_descriptor(str(engine.url))
- return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'database_kind':descriptor['kind'],'database_id':descriptor['id']}
+ kind=descriptor['kind']
+ db_label=f"{engine.url.host or 'localhost'}:{engine.url.port or 5432}/{engine.url.database or ''}" if kind.startswith('postgresql') else descriptor['label']
+ pool=engine.pool
+ pool_info={}
+ try:
+  pool_info={'pool_size':getattr(pool,'size',lambda:None)(),'checked_out':getattr(pool,'checkedout',lambda:None)(),'overflow':getattr(pool,'overflow',lambda:None)(),'checked_in':getattr(pool,'checkedin',lambda:None)()}
+ except Exception:pass
+ return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'database_kind':kind,'database_id':descriptor['id'],'database_label':db_label,'db_latency_ms':db_latency_ms,'pool':pool_info,'server_time':time.time()}
 
 def updater_database():
  return database_descriptor(str(engine.url))['id']

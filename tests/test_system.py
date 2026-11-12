@@ -239,3 +239,19 @@ def test_login_and_me_publish_running_version_for_both_roles():
   assert response.json()['disk_health_warning']==80
   identity=c.get('/api/me').json()
   assert identity['version']==APP_VERSION and identity['disk_health_warning']==80
+
+
+def test_system_health_endpoint_details():
+ from backend.main import app
+ c=TestClient(app)
+ res=c.get('/api/health')
+ assert res.status_code==200
+ data=res.json()
+ assert data['ok'] is True
+ assert 'database_kind' in data
+ assert 'database_label' in data
+ assert 'db_latency_ms' in data
+ assert isinstance(data['db_latency_ms'], (int, float))
+ assert 'pool' in data
+ assert isinstance(data['pool'], dict)
+ assert 'server_time' in data
