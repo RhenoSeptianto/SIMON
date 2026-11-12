@@ -241,6 +241,21 @@ def detail(id:int,u=Depends(user),s:Session=Depends(db)):
 class DeviceAssignments(BaseModel):
  user_ids:list[int]=Field(default_factory=list)
 
+class DeviceStoreCode(BaseModel):
+ store_code:str=Field(default='',max_length=40)
+
+@app.put('/api/devices/{id}/store-code')
+def save_device_store_code(id:int,v:DeviceStoreCode,u=Depends(admin),s:Session=Depends(db)):
+ d=device(s,id,u);old=d.store_code
+ set_store_code(s,d,v.store_code)
+ inv=json.loads(d.inventory or '{}')
+ inv['store_code']=d.store_code
+ inv['admin_store_code']=d.store_code
+ d.inventory=json.dumps(inv)
+ audit(s,u.id,'update_store_code',json.dumps({'device_id':id,'old':old,'new':d.store_code}))
+ commit_store(s,d.store_code)
+ return {'ok':True,'store_code':d.store_code}
+
 @app.get('/api/devices/{id}/assignments')
 def device_assignments(id:int,u=Depends(admin),s:Session=Depends(db)):
  device(s,id,u)
@@ -360,6 +375,10 @@ def process_report(v,d,s):
  d=s.get(Device,d.id); d.last_seen=now()
  if v.kind=='inventory':
   validate_machine(d,v.payload)
+  prev_inv=json.loads(d.inventory or '{}')
+  if prev_inv.get('admin_store_code') is not None:
+   v.payload['store_code']=prev_inv['admin_store_code']
+   v.payload['admin_store_code']=prev_inv['admin_store_code']
   d.inventory=json.dumps(v.payload); d.hostname=str(v.payload.get('hostname',d.hostname)); d.ip=str(v.payload.get('primary_ip',d.ip)); d.serial=str(v.payload.get('bios_serial',d.serial))
   if 'store_code' in v.payload: set_store_code(s,d,v.payload['store_code'])
  elif v.kind!='heartbeat':
@@ -377,7 +396,7 @@ def process_report(v,d,s):
  if cleanup_due: s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete()
  commit_store(s,d.store_code)
  if cleanup_due: _last_telemetry_cleanup=now()
- resp={'ok':True}
+ resp={'ok':True,'store_code':d.store_code}
  if v.kind in ('heartbeat','inventory'):
   from backend.agent_packages import claim_device_update
   inv=json.loads(d.inventory or '{}')

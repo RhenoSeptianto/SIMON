@@ -94,7 +94,14 @@ def run():
       r=client.post('/api/agent/report',json=json.loads(payload),headers={'Authorization':'Bearer '+ident['credential']}); r.raise_for_status(); queue.execute('delete from queue where id=?',(id,)); queue.commit()
       try:
        body=r.json()
-       if isinstance(body,dict) and body.get('agent_update'):update_cmd=body['agent_update']
+       if isinstance(body,dict):
+        if body.get('agent_update'):update_cmd=body['agent_update']
+        if 'store_code' in body and str(body['store_code'] or '')!=store_code:
+         store_code=str(body['store_code'] or '').strip()
+         if args.config and Path(args.config).is_file():
+          try:
+           cfg_path=Path(args.config);cfg_data=json.loads(cfg_path.read_text(encoding='utf-8-sig'));cfg_data['store_code']=store_code;cfg_path.write_text(json.dumps(cfg_data,indent=2),encoding='utf-8')
+          except Exception:pass
       except Exception:pass
      if update_cmd:
       from agent.updater import trigger_self_update

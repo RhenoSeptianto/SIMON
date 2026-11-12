@@ -42,3 +42,20 @@ def test_legacy_unkeyed_row_still_reserves_its_code():
   s.add(Device(uuid=str(uuid.uuid4()),claim='legacy',hostname='LEGACY-PC',store_code=' A22 ',status='approved'));s.commit()
  response=enroll(TestClient(app),str(uuid.uuid4()),'a22')
  assert response.status_code==409 and 'LEGACY-PC' in response.json()['detail']
+
+
+def test_super_admin_can_update_store_code_and_agent_inventory_does_not_overwrite():
+ from backend.main import User,password
+ with DB() as s:
+  s.add(User(name='Store Admin',username='storeadmin',password=password('1'),role='super_admin',active=1));s.commit()
+ c=TestClient(app);uid=str(uuid.uuid4())
+ assert enroll(c,uid,'OLD99','STORE-EDIT-PC').status_code==200
+ token=c.post('/api/agent/claim',json={'uuid':uid,'claim':'test-claim-'+'x'*40}).json()['credential']
+ with DB() as s:did=s.query(Device).filter_by(uuid=uid).one().id
+ c.post('/api/login',json={'username':'storeadmin','password':'1'})
+ res=c.put(f'/api/devices/{did}/store-code',headers={'X-SIAMS-Request':'1'},json={'store_code':'NEW99'})
+ assert res.status_code==200 and res.json()['store_code']=='NEW99'
+ # Subsequent inventory report with old store_code does not overwrite admin's NEW99 and receives NEW99 back
+ rep=c.post('/api/agent/report',headers={'Authorization':'Bearer '+token},json={'event_id':str(uuid.uuid4()),'collected_at':time.time(),'kind':'inventory','payload':{'hostname':'STORE-EDIT-PC','store_code':'OLD99'}})
+ assert rep.status_code==200 and rep.json()['store_code']=='NEW99'
+ with DB() as s:assert s.get(Device,did).store_code=='NEW99'
