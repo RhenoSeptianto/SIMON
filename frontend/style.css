@@ -25,6 +25,14 @@ dialog.device-dialog{width:min(960px,94vw);max-width:960px;height:min(820px,92dv
 .server-status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; transition: background .4s, box-shadow .4s; }
 @media(max-width:600px){ .server-status-pill span:not(.server-status-dot){display:none} .server-status-pill{padding:8px;border-radius:50%} }
 
+.bulk-assignment { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; margin: 0 0 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+.bulk-assignment div { display: flex; align-items: baseline; gap: 8px; margin-right: auto; }
+.bulk-assignment b { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.bulk-assignment small { color: var(--muted); font-size: 11px; }
+.bulk-assignment select { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.bulk-assignment button { padding: 7px 14px; font-size: 12px; }
+@media(max-width:800px){ .bulk-assignment{flex-direction:column;align-items:stretch} .bulk-assignment div{margin-right:0;flex-direction:column;gap:2px} }
+
 /* === SERVER STATUS PANEL === */
 .sidebar-server-dot { transition: background .4s, box-shadow .4s; }
 .server-dot-ok { background: #49bb95; box-shadow: 0 0 0 4px #49bb9520; }
