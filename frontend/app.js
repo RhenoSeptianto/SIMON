@@ -86,20 +86,17 @@ async function refreshDashboard(){
  if(refreshingDashboard||!me||document.hidden||document.querySelector('dialog[open]')||!['Devices','Overview'].includes(view))return;
  refreshingDashboard=true;const currentView=view,content=document.querySelector('#content'),currentUser=me;
  try{
-  const result=await api('devices?limit_=200');
-  const summary=currentView==='Overview'?await api(summaryPath()):null;
+  if(currentView==='Devices'){await filter(true);return}
+  const [result,summary]=await Promise.all([api('devices?page=1&limit_=8&priority=true'),api(summaryPath())]);
   if(me!==currentUser||view!==currentView||!content?.isConnected||document.querySelector('dialog[open]'))return;
   devices=result.items;
-  if(currentView==='Devices')filter();
-  else{
-   const tableContainer=content.querySelector('#overviewDevices');
-   if(!tableContainer)return;
-   applyNavSummary(summary);
-   content.querySelectorAll('.kpi-card strong').forEach((node,index)=>{node.textContent=[summary.devices,summary.online,summary.offline,admin()?summary.unassigned:watchedStores(),summary.agent_old][index]});
-   content.querySelector('#overviewCount').textContent=overviewCount(summary.devices);
-   tableContainer.innerHTML=deviceTable(prioritizeDiskHealth([...devices].sort((a,b)=>b.id-a.id)).slice(0,8));
-   tableContainer.querySelectorAll('[data-device]').forEach(button=>button.onclick=()=>details(button.dataset.device));
-  }
+  const tableContainer=content.querySelector('#overviewDevices');
+  if(!tableContainer)return;
+  applyNavSummary(summary);
+  content.querySelectorAll('.kpi-card strong').forEach((node,index)=>{node.textContent=[summary.devices,summary.online,summary.offline,admin()?summary.unassigned:watchedStores(),summary.agent_old][index]});
+  content.querySelector('#overviewCount').textContent=overviewCount(summary.devices);
+  tableContainer.innerHTML=deviceTable(devices);
+  tableContainer.querySelectorAll('[data-device]').forEach(button=>button.onclick=()=>details(button.dataset.device));
  }catch(error){console.warn('Pembaruan dashboard gagal:',error.message)}finally{refreshingDashboard=false}
 }
 setInterval(refreshDashboard,10000);

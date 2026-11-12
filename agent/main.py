@@ -55,6 +55,7 @@ def run():
  def collect_inventory(): return {**inventory(),'machine_id':machine_id(),'store_code':store_code,'heartbeat_interval_seconds':schedule['heartbeat'],'metrics_interval_seconds':schedule['metrics']}
  def enqueue(kind,payload):
   if kind=='storage': queue.execute("delete from queue where kind='storage'")
+  elif kind in ('metrics','heartbeat'): queue.execute("delete from queue where kind='heartbeat'")
   queue.execute('insert into queue(payload,kind) values (?,?)',(json.dumps({'event_id':str(uuid.uuid4()),'collected_at':time.time(),'kind':kind,'payload':payload}),kind))
   queue.execute('delete from queue where id not in (select id from queue order by id desc limit 2000)'); queue.commit()
  if args.diagnose:
@@ -75,11 +76,16 @@ def run():
      update=sentinel.read_update()
      if update is not None: enqueue('storage',update)
     except Exception: logging.exception('collector_failed kind=sentinel')
-    for kind in schedule:
+    metrics_ran=False
+    for kind in ('inventory','metrics','heartbeat'):
      if time.monotonic()<due[kind]: continue
+     if kind=='heartbeat' and metrics_ran:
+      due[kind]=time.monotonic()+schedule[kind]*random.uniform(.9,1.1)
+      continue
      try:
       payload={} if kind=='heartbeat' else {'inventory':collect_inventory,'metrics':metrics}[kind]()
       enqueue(kind,payload)
+      if kind=='metrics':metrics_ran=True
      except Exception: logging.exception('collector_failed kind=%s',kind)
      due[kind]=time.monotonic()+schedule[kind]*random.uniform(.9,1.1)
     if not ident.get('credential'):

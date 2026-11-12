@@ -273,3 +273,24 @@ def test_devices_unassigned_filter():
  assert 'UNASSIGNED-FILTER-PC' in names
  assert 'ASSIGNED-FILTER-PC' not in names
  assert res['facets']['unassigned']>=1
+
+
+def test_security_headers_and_400_store_optimizations():
+ import json
+ c=TestClient(app)
+ res=c.get('/api/health')
+ assert res.headers.get('X-Content-Type-Options')=='nosniff'
+ assert res.headers.get('X-Frame-Options')=='DENY'
+ assert res.headers.get('Referrer-Policy')=='same-origin'
+ uid=str(uuid.uuid4());claim='m'*64
+ assert c.post('/api/agent/enroll',json={'uuid':uid,'claim':claim,'inventory':{'hostname':'PERF-PC','primary_ip':'127.0.0.1'}}).status_code==200
+ token=c.post('/api/agent/claim',json={'uuid':uid,'claim':claim}).json()['credential']
+ headers={'Authorization':'Bearer '+token}
+ t0=time.time()
+ assert c.post('/api/agent/report',json={'event_id':str(uuid.uuid4()),'collected_at':t0,'kind':'metrics','payload':{'cpu_usage':10,'ram_percent':40}},headers=headers).status_code==200
+ assert c.post('/api/agent/report',json={'event_id':str(uuid.uuid4()),'collected_at':t0+10,'kind':'metrics','payload':{'cpu_usage':15,'ram_percent':42}},headers=headers).status_code==200
+ with DB() as s:
+  d=s.query(Device).filter_by(uuid=uid).first()
+  assert s.query(Sample).filter_by(device_id=d.id).count()==1
+  assert json.loads(d.metrics).get('last_history_at')==t0
+

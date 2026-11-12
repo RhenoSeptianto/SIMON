@@ -2,6 +2,7 @@ import os, json, secrets, hashlib, hmac, time, io, threading, contextlib, subpro
 from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Query
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -54,7 +55,11 @@ if 'store_code' not in {column['name'] for column in inspect(engine).get_columns
 # A nullable normalized key keeps blank legacy codes compatible; the DB enforces concurrent claims.
 if 'store_code_key' not in {column['name'] for column in inspect(engine).get_columns('devices')}:
  with engine.begin() as connection: connection.execute(text('ALTER TABLE devices ADD COLUMN store_code_key VARCHAR(160)'))
-with engine.begin() as connection: connection.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS uq_device_store_code_key ON devices (store_code_key)'))
+with engine.begin() as connection:
+ connection.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS uq_device_store_code_key ON devices (store_code_key)'))
+ connection.execute(text('CREATE INDEX IF NOT EXISTS ix_devices_credential ON devices (credential)'))
+ connection.execute(text('CREATE INDEX IF NOT EXISTS ix_telemetry_device_collected ON telemetry (device_id, collected)'))
+ connection.execute(text('CREATE INDEX IF NOT EXISTS ix_sessions_expires ON sessions (expires)'))
 with DB() as migration:
  if migrate_access:
   for old_user in migration.query(User).all():
@@ -68,6 +73,7 @@ with DB() as migration:
   migration.query(LoginSession).filter(LoginSession.user_id.in_(changed_roles)).delete(synchronize_session=False)
  migration.commit()
 app=FastAPI(title='SIMON - Sistem Monitoring',version='0.1.0')
+app.add_middleware(GZipMiddleware,minimum_size=1000)
 def db():
  with DB() as s: yield s
 def digest(v): return hashlib.sha256(v.encode()).hexdigest()
@@ -97,7 +103,7 @@ def agent_compatibility(inventory):
  valid_expected=len(expected)==40 and all(x in '0123456789abcdef' for x in expected)
  state='current' if valid_build and valid_expected and build==expected else 'outdated' if valid_build and valid_expected else 'unknown'
  return {'status':state,'label':{'current':'Agent terbaru','outdated':'Agent perlu diperbarui','unknown':'Versi agent tidak diketahui'}[state],'version':version or None,'build_sha':build if valid_build else None,'expected_sha':expected if valid_expected else None}
-def serialize(d):
+def serialize(d,localize=True):
  inventory=json.loads(d.inventory)
  # Keep legacy agents online using their old grace window during gradual rollout.
  grace=420
@@ -106,7 +112,8 @@ def serialize(d):
   if 0<interval<86400:grace=max(45,interval*3+15)
  except (ValueError,TypeError):pass
  if os.getenv('OFFLINE_SECONDS'):grace=float(os.environ['OFFLINE_SECONDS'])
- return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<grace,'last_seen':d.last_seen,'inventory':inventory,'agent':agent_compatibility(inventory),'metrics':localize_metrics(json.loads(d.metrics))}
+ raw_metrics=json.loads(d.metrics)
+ return {'id':d.id,'uuid':d.uuid,'store_code':d.store_code,'hostname':d.hostname,'ip':d.ip,'serial':d.serial,'status':d.status,'store_id':d.store_id,'online':d.status=='approved' and now()-d.last_seen<grace,'last_seen':d.last_seen,'inventory':inventory,'agent':agent_compatibility(inventory),'metrics':localize_metrics(raw_metrics) if localize else raw_metrics}
 class Login(BaseModel):
  username:str; password:str
 attempts={}
@@ -197,12 +204,12 @@ def device_priority(row):
  if hot:return (1,0,row['id'])
  if not row['online']:return (2,row.get('last_seen') or 0,row['id'])
  if stale:return (3,0,row['id'])
- if row['agent']['status']!='current':return (4,0,row['id'])
+ if row['agent']['status']!='current':return (4,0,-row['id'])
  return (5,0,-row['id'])
 
 @app.get('/api/devices')
 def devices(q:str='',store_id:int|None=None,online:int|None=None,attention:int|None=None,unassigned:int|None=None,agent_state:str='',priority:bool=True,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
- models=visible(s,u);assigned=assigned_ts(s,[d.id for d in models]);all_rows=[{**serialize(d),'ts_names':assigned[d.id]} for d in models]
+ models=visible(s,u);assigned=assigned_ts(s,[d.id for d in models]);all_rows=[{**serialize(d,localize=False),'ts_names':assigned[d.id]} for d in models]
  facets={'all':len(all_rows),'online':sum(d['online'] for d in all_rows),'offline':sum(not d['online'] for d in all_rows),'attention':sum(needs_attention(d) for d in all_rows),'unassigned':sum(len(d['ts_names'])==0 for d in all_rows),'agent_old':sum(d['agent']['status']!='current' for d in all_rows)}
  query=q.strip().casefold();rows=[]
  for row in all_rows:
@@ -215,7 +222,8 @@ def devices(q:str='',store_id:int|None=None,online:int|None=None,attention:int|N
   rows.append(row)
  if priority:rows.sort(key=device_priority)
  size=max(1,min(limit_,500)); start=(max(page,1)-1)*size
- return {'total':len(rows),'items':rows[start:start+size],'facets':facets}
+ items=[{**r,'metrics':localize_metrics(r['metrics'])} for r in rows[start:start+size]]
+ return {'total':len(rows),'items':items,'facets':facets}
 
 class BulkDeviceAssignments(BaseModel):
  device_ids:list[int]=Field(min_length=1,max_length=500)
@@ -300,8 +308,11 @@ def set_store_code(s,d,value):
  code=str(value or '').strip()
  if len(code)>40: raise HTTPException(422,'Kode store maksimal 40 karakter')
  key=code.casefold()
- # Inspect legacy rows too: existing duplicates are retained, never silently deleted/moved.
- owner=next((other for other in s.query(Device).filter(Device.store_code!='').all() if other.id!=d.id and other.store_code.strip().casefold()==key),None) if key else None
+ owner=None
+ if key:
+  owner=s.query(Device).filter(Device.id!=d.id,Device.store_code_key==key).first()
+  if not owner:
+   owner=next((other for other in s.query(Device).filter(Device.id!=d.id,Device.store_code_key.is_(None),Device.store_code!='').all() if other.store_code.strip().casefold()==key),None)
  if owner: raise store_conflict(code,owner)
  d.store_code=code;d.store_code_key=key or None
 
@@ -385,19 +396,26 @@ def process_report(v,d,s):
   m=json.loads(d.metrics); previous=dict(m)
   # Only CPU/RAM samples create history. Storage is an upsert of latest state.
   if v.kind=='metrics':
-   last_sample=s.query(Sample).filter_by(device_id=d.id).order_by(Sample.collected.desc()).first()
    history_interval=float(os.getenv('HISTORY_INTERVAL_SECONDS','300'))
-   if (last_sample is None or v.collected_at-last_sample.collected>=history_interval) and not s.query(Sample).filter_by(event_id=v.event_id).first():
+   last_hist=m.get('last_history_at')
+   if last_hist is None:
+    last_sample=s.query(Sample).filter_by(device_id=d.id).order_by(Sample.collected.desc()).first()
+    last_hist=last_sample.collected if last_sample else None
+    if last_hist is not None:m['last_history_at']=last_hist;d.metrics=json.dumps(m)
+   if (last_hist is None or v.collected_at-float(last_hist)>=history_interval) and not s.query(Sample).filter_by(event_id=v.event_id).first():
     s.add(Sample(device_id=d.id,event_id=v.event_id,collected=v.collected_at,payload=json.dumps(v.payload)))
+    m['last_history_at']=v.collected_at
   if v.collected_at>=m.get(v.kind+'_at',0):
    m.update(v.payload); m[v.kind+'_at']=v.collected_at; d.metrics=json.dumps(m)
    evaluate(s,d,m,previous)
  cleanup_due=now()-_last_telemetry_cleanup>=3600
- if cleanup_due: s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete()
+ if cleanup_due:
+  s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete(synchronize_session=False)
+  s.query(LoginSession).filter(LoginSession.expires<now()).delete(synchronize_session=False)
  commit_store(s,d.store_code)
  if cleanup_due: _last_telemetry_cleanup=now()
  resp={'ok':True,'store_code':d.store_code}
- if v.kind in ('heartbeat','inventory'):
+ if v.kind in ('heartbeat','metrics','inventory'):
   from backend.agent_packages import claim_device_update
   inv=json.loads(d.inventory or '{}')
   cmd=claim_device_update(DATA,current_update_sha(),d.id,inv.get('agent_build_sha',''))
@@ -447,7 +465,7 @@ def ack(id:int,u=Depends(user),s:Session=Depends(db)):
  device(s,a.device_id,u); a.status='acknowledged'; audit(s,u.id,'ack_alert',id); s.commit(); return {'ok':True}
 @app.get('/api/summary')
 def summary(after_alert_id:int=0,u=Depends(user),s:Session=Depends(db)):
- ds=[serialize(d) for d in visible(s,u)];ids=[d['id'] for d in ds]
+ ds=[serialize(d,localize=False) for d in visible(s,u)];ids=[d['id'] for d in ds]
  active_alerts=s.query(Alert).filter(Alert.device_id.in_(ids),Alert.status!='resolved').count() if ids else 0
  new_alerts=s.query(Alert).filter(Alert.device_id.in_(ids),Alert.status!='resolved',Alert.id>after_alert_id).count() if ids else 0
  latest_alert_id=s.query(func.max(Alert.id)).filter(Alert.device_id.in_(ids)).scalar() if ids else 0
@@ -506,13 +524,18 @@ def reset_database(v:ResetDatabase,u=Depends(super_admin),s:Session=Depends(db))
 async def maintenance_gate(request,call_next):
  if (DATA/'updater'/'maintenance.json').exists() and request.url.path.startswith('/api/') and request.url.path not in ('/api/health','/api/me','/api/system/update/status'):
   from fastapi.responses import JSONResponse
-  return JSONResponse({'detail':'SIMON sedang diperbarui. Coba lagi setelah selesai.'},status_code=503,headers={'Retry-After':'5'})
- return await call_next(request)
+  response=JSONResponse({'detail':'SIMON sedang diperbarui. Coba lagi setelah selesai.'},status_code=503,headers={'Retry-After':'5'})
+ else:
+  response=await call_next(request)
+ response.headers.setdefault('X-Content-Type-Options','nosniff')
+ response.headers.setdefault('X-Frame-Options','DENY')
+ response.headers.setdefault('Referrer-Policy','same-origin')
+ return response
 
 @app.get('/api/health')
 def system_health(s:Session=Depends(db)):
  t0=time.monotonic()
- for model in (User,Device,Sample,LoginSession,Alert,UserDeviceAccess,Audit):s.query(model).limit(1).all()
+ s.query(User.id).limit(1).all()
  db_latency_ms=round((time.monotonic()-t0)*1000,1)
  descriptor=database_descriptor(str(engine.url))
  kind=descriptor['kind']
@@ -566,7 +589,7 @@ def current_update_sha():
 @app.get('/api/system/agent-package/status')
 def agent_package_status(u=Depends(super_admin),s:Session=Depends(db)):
  from backend.agent_packages import status
- devices=[serialize(d) for d in s.query(Device).all()]
+ devices=[serialize(d,localize=False) for d in s.query(Device).all()]
  return status(DATA,current_update_sha(),devices=devices)
 
 @app.post('/api/system/agent-package/prepare')
@@ -579,7 +602,7 @@ def agent_package_prepare(u=Depends(super_admin),s:Session=Depends(db)):
 @app.post('/api/system/agent-package/rollout')
 def agent_package_rollout(u=Depends(super_admin),s:Session=Depends(db)):
  from backend.agent_packages import start_rollout,status,AgentPackageError
- devices=[serialize(d) for d in s.query(Device).all()]
+ devices=[serialize(d,localize=False) for d in s.query(Device).all()]
  try:
   rollout=start_rollout(DATA,current_update_sha(),devices,actor=u.id)
   audit(s,u.id,'start_agent_rollout',json.dumps({'target_sha':rollout['target_sha'],'total':rollout['total']}))
