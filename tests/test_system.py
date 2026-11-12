@@ -258,6 +258,8 @@ def test_system_health_endpoint_details():
 
 
 def test_devices_unassigned_filter():
+ from openpyxl import load_workbook
+ from io import BytesIO
  from backend.main import attempts,UserDeviceAccess
  attempts.clear()
  with DB() as s:
@@ -273,6 +275,10 @@ def test_devices_unassigned_filter():
  assert 'UNASSIGNED-FILTER-PC' in names
  assert 'ASSIGNED-FILTER-PC' not in names
  assert res['facets']['unassigned']>=1
+ w=load_workbook(BytesIO(c.get('/api/reports/xlsx?unassigned=1&q=UNASSIGNED-FILTER-PC').content))
+ vals=[value for sheet in w for row in sheet.values for value in row]
+ assert 'UNASSIGNED-FILTER-PC' in vals
+ assert 'ASSIGNED-FILTER-PC' not in vals
 
 
 def test_security_headers_and_400_store_optimizations():
@@ -293,4 +299,6 @@ def test_security_headers_and_400_store_optimizations():
   d=s.query(Device).filter_by(uuid=uid).first()
   assert s.query(Sample).filter_by(device_id=d.id).count()==1
   assert json.loads(d.metrics).get('last_history_at')==t0
+
+
 

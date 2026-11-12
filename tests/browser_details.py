@@ -34,6 +34,7 @@ try:
   expect(page.get_by_role('button',name='UpdateSimon',exact=True)).to_be_visible()
   expect(page.locator('.kpi-card')).to_have_count(5)
   expect(page.locator('.kpi-card').nth(4)).to_contain_text('Simon Agent')
+  expect(page.locator('.agent-mini-badge').first).to_have_text('v1.0.0')
   assert 'Offline' in page.evaluate("connectionBadge({online:false,last_seen:Date.now()/1000-7200})") and '2 jam' in page.evaluate("connectionBadge({online:false,last_seen:Date.now()/1000-7200})")
   expect(page.get_by_role('columnheader',name='TS',exact=True)).to_be_visible()
   expect(page.get_by_role('columnheader',name='Health Disk',exact=True)).to_be_visible()
@@ -116,6 +117,7 @@ try:
      expect(page.get_by_text('Pemasangan awal diperlukan satu kali')).to_be_visible()
     if section=='Reports':
      expect(page.get_by_role('link',name='Unduh Excel')).to_be_visible()
+     expect(page.locator('#reportFilter')).to_be_visible()
      expect(page.locator('a[href="/api/reports/csv"]')).to_have_count(0)
      if theme=='light':
       with page.expect_download() as download_info:page.get_by_role('link',name='Unduh Excel').click()

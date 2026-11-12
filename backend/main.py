@@ -472,10 +472,22 @@ def summary(after_alert_id:int=0,u=Depends(user),s:Session=Depends(db)):
  assigned_ids={x[0] for x in s.query(UserDeviceAccess.device_id).filter(UserDeviceAccess.device_id.in_(ids)).all()} if ids else set()
  return {'devices':len(ds),'online':sum(d['online'] for d in ds),'offline':sum(d['status']=='approved' and not d['online'] for d in ds),'unassigned':sum(d['id'] not in assigned_ids for d in ds),'attention':sum(needs_attention(d) for d in ds),'agent_old':sum(d['agent']['status']!='current' for d in ds),'database_kind':engine.dialect.name,'last_report_at':max((d['last_seen'] for d in ds),default=0),'active_alerts':active_alerts,'new_alerts':new_alerts,'latest_alert_id':latest_alert_id or 0}
 @app.get('/api/reports/{format}')
-def export(format:str,u=Depends(user),s:Session=Depends(db)):
+def export(format:str,q:str='',online:int|None=None,attention:int|None=None,unassigned:int|None=None,agent_state:str='',u=Depends(user),s:Session=Depends(db)):
  if format!='xlsx':raise HTTPException(404,'Laporan hanya tersedia dalam format Excel (.xlsx)')
  from backend.reports import inventory_workbook
  models=visible(s,u);ts_map=assigned_ts(s,[d.id for d in models])
+ if q or online is not None or attention is not None or unassigned is not None or agent_state:
+  query=q.strip().casefold();filtered=[]
+  for d in models:
+   row={**serialize(d,localize=False),'ts_names':ts_map.get(d.id,[])}
+   haystack=' '.join((row.get('hostname') or '',row.get('ip') or '',row.get('store_code') or '',*row.get('ts_names',[]))).casefold()
+   if query and query not in haystack:continue
+   if online is not None and row['online']!=(online==1):continue
+   if attention is not None and needs_attention(row)!=(attention==1):continue
+   if unassigned is not None and (len(row['ts_names'])==0)!=(unassigned==1):continue
+   if agent_state=='old' and row['agent']['status']=='current':continue
+   filtered.append(d)
+  models=filtered
  data,filename=inventory_workbook(models,lambda d:{**serialize(d),'ts_names':ts_map.get(d.id,[])})
  return StreamingResponse(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f'attachment; filename="{filename}"'})
 @app.get('/api/audit')
