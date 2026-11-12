@@ -89,8 +89,17 @@ def run():
      elif result.get('status')=='credential_issued' and previous_credential: ident['credential']=previous_credential;logging.info('enrollment_ready store_code=%s',store_code)
      else: logging.info('enrollment_status=%s',result['status']); backoff=300
     if ident.get('credential'):
+     update_cmd=None
      for id,payload in queue.execute('select id,payload from queue order by id limit 50').fetchall():
       r=client.post('/api/agent/report',json=json.loads(payload),headers={'Authorization':'Bearer '+ident['credential']}); r.raise_for_status(); queue.execute('delete from queue where id=?',(id,)); queue.commit()
+      try:
+       body=r.json()
+       if isinstance(body,dict) and body.get('agent_update'):update_cmd=body['agent_update']
+      except Exception:pass
+     if update_cmd:
+      from agent.updater import trigger_self_update
+      if trigger_self_update(client,ident['credential'],update_cmd,state,args.config):
+       queue.close();return
     if ident.get('credential'): backoff=1
    except httpx.HTTPStatusError as error:
     if error.response.status_code==401 and ident.get('credential'):

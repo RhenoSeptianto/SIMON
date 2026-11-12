@@ -30,7 +30,7 @@ def conflicting_agent(server):
  for process in psutil.process_iter(['pid','name','cmdline']):
   if process.pid==os.getpid() or (process.info['name'] or '').lower()!='simonagent.exe':continue
   command=process.info['cmdline'] or []
-  if any(flag in command for flag in ('--background','--install-user','--check-connection','--diagnose','--once','--service')):continue
+  if any(flag in command for flag in ('--background','--install-user','--check-connection','--diagnose','--once','--service','--apply-update')):continue
   if '--config' in command:
    try:
     settings=json.loads(Path(command[command.index('--config')+1]).read_text(encoding='utf-8-sig'))

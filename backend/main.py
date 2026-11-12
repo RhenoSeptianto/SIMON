@@ -92,7 +92,7 @@ def device(s,id,u):
  if not d or not allowed(u,d): raise HTTPException(404,'Perangkat tidak ditemukan')
  return d
 def agent_compatibility(inventory):
- version=str(inventory.get('agent_version') or '').strip();build=str(inventory.get('agent_build_sha') or '').strip().lower();expected=str(os.getenv('SIAMS_BUILD_SHA','')).strip().lower()
+ version=str(inventory.get('agent_version') or '').strip();build=str(inventory.get('agent_build_sha') or '').strip().lower();expected=str(os.getenv('SIAMS_BUILD_SHA','') or current_update_sha()).strip().lower()
  valid_build=len(build)==40 and all(x in '0123456789abcdef' for x in build)
  valid_expected=len(expected)==40 and all(x in '0123456789abcdef' for x in expected)
  state='current' if valid_build and valid_expected and build==expected else 'outdated' if valid_build and valid_expected else 'unknown'
@@ -376,7 +376,13 @@ def process_report(v,d,s):
  if cleanup_due: s.query(Sample).filter(Sample.received<now()-int(os.getenv('RETENTION_DAYS','30'))*86400).delete()
  commit_store(s,d.store_code)
  if cleanup_due: _last_telemetry_cleanup=now()
- return {'ok':True}
+ resp={'ok':True}
+ if v.kind in ('heartbeat','inventory'):
+  from backend.agent_packages import claim_device_update
+  inv=json.loads(d.inventory or '{}')
+  cmd=claim_device_update(DATA,current_update_sha(),d.id,inv.get('agent_build_sha',''))
+  if cmd:resp['agent_update']=cmd
+ return resp
 def evaluate(s,d,m,previous=None):
  previous=previous or {}
  def condition(category,bad,message):
@@ -537,9 +543,10 @@ def current_update_sha():
  return status(DATA,ROOT).get('current','')
 
 @app.get('/api/system/agent-package/status')
-def agent_package_status(u=Depends(super_admin)):
+def agent_package_status(u=Depends(super_admin),s:Session=Depends(db)):
  from backend.agent_packages import status
- return status(DATA,current_update_sha())
+ devices=[serialize(d) for d in s.query(Device).all()]
+ return status(DATA,current_update_sha(),devices=devices)
 
 @app.post('/api/system/agent-package/prepare')
 def agent_package_prepare(u=Depends(super_admin),s:Session=Depends(db)):
@@ -548,12 +555,38 @@ def agent_package_prepare(u=Depends(super_admin),s:Session=Depends(db)):
   result=prepare(DATA,ROOT,current_update_sha());audit(s,u.id,'prepare_agent_package',result['source_sha']);s.commit();return result
  except AgentPackageError as error:raise HTTPException(409,str(error))
 
+@app.post('/api/system/agent-package/rollout')
+def agent_package_rollout(u=Depends(super_admin),s:Session=Depends(db)):
+ from backend.agent_packages import start_rollout,status,AgentPackageError
+ devices=[serialize(d) for d in s.query(Device).all()]
+ try:
+  rollout=start_rollout(DATA,current_update_sha(),devices,actor=u.id)
+  audit(s,u.id,'start_agent_rollout',json.dumps({'target_sha':rollout['target_sha'],'total':rollout['total']}))
+  s.commit()
+  return status(DATA,current_update_sha(),devices=devices)
+ except AgentPackageError as error:raise HTTPException(409,str(error))
+
 @app.get('/api/system/agent-package/download')
 def agent_package_download(u=Depends(super_admin)):
  from backend.agent_packages import status
  state=status(DATA,current_update_sha());path=DATA/'agent-package'/'SIMONAgent-store.zip'
  if not state['ready'] or not path.is_file():raise HTTPException(404,'Paket agent terbaru belum siap. Klik Ambil agent terbaru dahulu.')
  return FileResponse(path,media_type='application/zip',filename='SIMONAgent-store.zip')
+
+@app.get('/api/agent/update/package')
+def agent_update_package(d=Depends(agent)):
+ from backend.agent_packages import status
+ state=status(DATA,current_update_sha());path=DATA/'agent-package'/'SIMONAgent-store.zip'
+ if not state['ready'] or not path.is_file():raise HTTPException(404,'Paket agent terbaru belum siap.')
+ return FileResponse(path,media_type='application/zip',filename='SIMONAgent-store.zip')
+
+class AgentUpdateStatus(BaseModel):
+ state:str=Field(max_length=40); target_sha:str=''; error:str=''
+
+@app.post('/api/agent/update/status')
+def agent_update_status(v:AgentUpdateStatus,d=Depends(agent)):
+ from backend.agent_packages import record_device_update_status
+ return record_device_update_status(DATA,current_update_sha(),d.id,v.state,v.error)
 
 app.mount('/static',StaticFiles(directory=ROOT/'frontend'),name='static')
 @app.get('/')
