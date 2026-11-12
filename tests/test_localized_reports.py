@@ -38,6 +38,7 @@ def test_excel_has_three_localized_sheets_permissions_types_and_safe_text():
  assert pc['A2'].value=='00115' and pc['A2'].data_type=='s'
  assert pc['B2'].value=='=1+1' and pc['B2'].data_type=='s'
  assert pc['H2'].value==16 and isinstance(pc['K2'].value,__import__('datetime').datetime)
+ assert pc['L2'].value=='TS'
  assert disks['I2'].value==95 and disks['K2'].value==37
  assert disks['K3'].value=='Tidak tersedia'
  assert disks['N2'].value.startswith('Tidak aktif') and disks['P2'].value=='Tidak perlu tindakan.'

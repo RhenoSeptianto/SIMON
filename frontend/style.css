@@ -87,13 +87,19 @@ main { transition: margin-left .18s ease; }
 /* Compact vertical spacing above Overview/Devices tables */
 .topbar { min-height: 68px; margin-bottom: 18px; padding: 12px 0; }
 h2 { margin: 2px 0 8px; font-size: 25px; }
-.device-scope { padding: 11px 15px; margin: 10px 0; align-items: center; }
-.device-scope p { margin: 2px 0 0; font-size: 11.5px; }
-.monitoring-schedule { margin: 10px 0; }
-.monitoring-schedule summary { padding: 10px 15px; font-size: 12.5px; }
-.kpis { margin: 14px 0 18px; gap: 14px; }
-.kpi-card { padding: 16px 18px; }
-.kpi-card strong { font-size: 30px; margin: 8px 0 4px; }
+.top-info-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; }
+.device-scope { padding: 7px 13px; margin: 0; align-items: center; gap: 8px; border-radius: 8px; font-size: 12px; }
+.device-scope b { font-size: 12px; font-weight: 600; }
+.device-scope .scope-icon { padding-top: 0; }
+.device-scope .scope-icon .ui-icon { width: 16px; height: 16px; }
+.monitoring-schedule { margin: 0; border-radius: 8px; }
+.monitoring-schedule summary { padding: 7px 13px; font-size: 12px; line-height: 1.4; }
+.monitoring-schedule[open] { width: 100%; margin-top: 4px; }
+.kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 12px 0 18px; gap: 12px; }
+.kpi-card { padding: 15px 16px; }
+.kpi-card strong { font-size: 28px; margin: 8px 0 4px; }
+@media(max-width:1100px){ .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media(max-width:800px){ .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .toolbar.device-search { margin: 12px 0; }
 .bulk-assignment { margin: 0 0 12px; padding: 10px 14px; }
 

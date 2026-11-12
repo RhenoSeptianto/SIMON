@@ -438,7 +438,8 @@ def summary(after_alert_id:int=0,u=Depends(user),s:Session=Depends(db)):
 def export(format:str,u=Depends(user),s:Session=Depends(db)):
  if format!='xlsx':raise HTTPException(404,'Laporan hanya tersedia dalam format Excel (.xlsx)')
  from backend.reports import inventory_workbook
- data,filename=inventory_workbook(visible(s,u),serialize)
+ models=visible(s,u);ts_map=assigned_ts(s,[d.id for d in models])
+ data,filename=inventory_workbook(models,lambda d:{**serialize(d),'ts_names':ts_map.get(d.id,[])})
  return StreamingResponse(data,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':f'attachment; filename="{filename}"'})
 @app.get('/api/audit')
 def audits(u=Depends(admin),s:Session=Depends(db)): return [{'actor':x.actor,'action':x.action,'target':x.target,'timestamp':x.timestamp} for x in s.query(Audit).order_by(Audit.id.desc()).limit(200)]

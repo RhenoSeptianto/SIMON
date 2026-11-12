@@ -66,7 +66,8 @@ def inventory_workbook(devices,serialize):
     for device in devices:
         data=serialize(device);metrics=data['metrics'];inventory=data['inventory']
         prefix=[data.get('store_code'),data['hostname'],data['ip']]
-        pc_rows.append(prefix+[data['serial'],inventory.get('os_name'),inventory.get('cpu'),numeric(metrics.get('cpu_usage')),gibibytes(metrics.get('ram_total')),numeric(metrics.get('ram_percent')),'Online' if data['online'] else 'Offline',local_time(data['last_seen'])])
+        ts_label=', '.join(data.get('ts_names') or []) or 'Belum diassign'
+        pc_rows.append(prefix+[data['serial'],inventory.get('os_name'),inventory.get('cpu'),numeric(metrics.get('cpu_usage')),gibibytes(metrics.get('ram_total')),numeric(metrics.get('ram_percent')),'Online' if data['online'] else 'Offline',local_time(data['last_seen']),ts_label])
         for raw_disk in metrics.get('disks',[]):
             disk=localize_disk(raw_disk)
             disk_rows.append(prefix+[disk.get('model'),disk.get('serial_number'),disk.get('media_type'),disk.get('bus_type'),gibibytes(disk.get('capacity_bytes')),numeric(disk.get('health_percent')),numeric(disk.get('performance_percent')),numeric(disk.get('temperature_c')),numeric(disk.get('power_on_hours')),disk.get('estimated_remaining_lifetime_id'),disk.get('power_state_id'),disk.get('sentinel_description_id'),disk.get('sentinel_tip_id'),report_datetime(metrics.get('sentinel_report_time')),xml_status(metrics.get('sentinel_status'))])
@@ -78,7 +79,7 @@ def inventory_workbook(devices,serialize):
             volume_rows.append(prefix+[volume.get('drive_letter'),volume.get('filesystem'),gibibytes(total),gibibytes(used),gibibytes(free),used_percent,free_percent])
     workbook=Workbook();workbook.remove(workbook.active)
     workbook.properties.creator='SIMON';workbook.properties.title='Laporan Inventaris Perangkat'
-    write_sheet(workbook,'Perangkat',['Kode Store','Nama PC','Alamat IP','Nomor Seri PC','Sistem Operasi','Prosesor','Penggunaan CPU (%)','Total RAM (GiB)','Penggunaan RAM (%)','Status Koneksi','Terakhir Terhubung (WIB)'],pc_rows,[16,24,20,24,38,46,22,20,22,18,28],'TabelPerangkat')
+    write_sheet(workbook,'Perangkat',['Kode Store','Nama PC','Alamat IP','Nomor Seri PC','Sistem Operasi','Prosesor','Penggunaan CPU (%)','Total RAM (GiB)','Penggunaan RAM (%)','Status Koneksi','Terakhir Terhubung (WIB)','TS'],pc_rows,[16,24,20,24,38,46,22,20,22,18,28,24],'TabelPerangkat')
     write_sheet(workbook,'SSD-HDD',['Kode Store','Nama PC','Alamat IP','Model Disk','Nomor Seri Disk','Jenis Disk','Interface','Kapasitas (GiB)','Kesehatan (%)','Performa (%)','Suhu ('+chr(176)+'C)','Total Jam Pemakaian','Perkiraan Sisa Umur','Status Pemantauan','Keterangan Sentinel','Saran Sentinel','Waktu Laporan Sentinel','Status XML'],disk_rows,[16,24,20,38,30,16,28,20,18,18,16,24,28,48,70,52,28,24],'TabelDisk')
     write_sheet(workbook,'Kapasitas Drive',['Kode Store','Nama PC','Alamat IP','Drive','File System','Total (GiB)','Terpakai (GiB)','Tersisa (GiB)','Terpakai (%)','Tersisa (%)'],volume_rows,[16,24,20,14,18,20,20,20,20,20],'TabelDrive')
     output=io.BytesIO();workbook.save(output);workbook.close();output.seek(0)
