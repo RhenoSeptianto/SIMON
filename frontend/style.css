@@ -62,3 +62,52 @@ dialog.device-dialog{width:min(960px,94vw);max-width:960px;height:min(820px,92dv
 .srv-latency-warn { color: #a66d10; }
 .dark .srv-latency-warn { color: #e8bf62; }
 .srv-status-actions { display: flex; gap: 10px; }
+
+/* === COLLAPSIBLE SIDEBAR, COMPACT TOP SPACING, USERS PC CHIPS, COPY IP & STICKY HEADER === */
+.sidebar { transition: width .18s ease, padding .18s ease; }
+main { transition: margin-left .18s ease; }
+.brand { position: relative; margin-bottom: 28px; }
+.sidebar-toggle { margin-left: auto; width: 28px; height: 28px; padding: 5px; border-radius: 7px; background: #ffffff0c; border: 1px solid #ffffff14; color: #b6c8d5; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sidebar-toggle:hover { background: #ffffff18; color: #fff; filter: none; }
+.sidebar-toggle .ui-icon { width: 15px; height: 15px; transition: transform .18s ease; }
+@media(min-width:801px){
+ html.sidebar-collapsed .sidebar { width: 72px; padding: 24px 10px 18px; align-items: center; }
+ html.sidebar-collapsed main { margin-left: 72px; }
+ html.sidebar-collapsed .brand { flex-direction: column; gap: 10px; margin-bottom: 22px; }
+ html.sidebar-collapsed .brand-text, html.sidebar-collapsed .nav-caption, html.sidebar-collapsed .sidebar nav button > span:not(.nav-indicator-group), html.sidebar-collapsed .sidebar-bottom-text, html.sidebar-collapsed .sidebar nav .nav-dot { display: none; }
+ html.sidebar-collapsed .sidebar-toggle { margin-left: 0; }
+ html.sidebar-collapsed .sidebar-toggle .ui-icon { transform: rotate(180deg); }
+ html.sidebar-collapsed .sidebar nav { width: 100%; align-items: center; }
+ html.sidebar-collapsed .sidebar nav button { justify-content: center; padding: 12px 0; width: 46px; }
+ html.sidebar-collapsed .nav-indicator-group { position: absolute; top: 4px; right: 4px; margin: 0; }
+ html.sidebar-collapsed .sidebar-bottom { justify-content: center; padding: 16px 0 0; width: 100%; }
+}
+@media(max-width:800px){ .sidebar-toggle { display: none; } }
+
+/* Compact vertical spacing above Overview/Devices tables */
+.topbar { min-height: 68px; margin-bottom: 18px; padding: 12px 0; }
+h2 { margin: 2px 0 8px; font-size: 25px; }
+.device-scope { padding: 11px 15px; margin: 10px 0; align-items: center; }
+.device-scope p { margin: 2px 0 0; font-size: 11.5px; }
+.monitoring-schedule { margin: 10px 0; }
+.monitoring-schedule summary { padding: 10px 15px; font-size: 12.5px; }
+.kpis { margin: 14px 0 18px; gap: 14px; }
+.kpi-card { padding: 16px 18px; }
+.kpi-card strong { font-size: 30px; margin: 8px 0 4px; }
+.toolbar.device-search { margin: 12px 0; }
+.bulk-assignment { margin: 0 0 12px; padding: 10px 14px; }
+
+/* Users page PC access chips */
+.user-pc-cell { white-space: normal; max-width: 520px; }
+.user-pc-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pc-count-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 12px; font-size: 10.5px; font-weight: 700; background: var(--soft); color: var(--accent); border: 1px solid var(--line); white-space: nowrap; }
+.pc-chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 11px; background: var(--hover); border: 1px solid var(--line); color: inherit; white-space: nowrap; }
+.pc-chip-more { color: var(--muted); font-weight: 600; cursor: help; }
+.pc-chip-all { background: var(--soft); color: var(--accent); font-weight: 600; }
+
+/* Copyable IP address */
+.copy-ip { cursor: pointer; border-bottom: 1px dashed transparent; transition: color .15s, border-color .15s; }
+.copy-ip:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Sticky table headers */
+thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--line); }

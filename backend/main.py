@@ -201,15 +201,16 @@ def device_priority(row):
  return (5,0,-row['id'])
 
 @app.get('/api/devices')
-def devices(q:str='',store_id:int|None=None,online:int|None=None,attention:int|None=None,agent_state:str='',priority:bool=True,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
+def devices(q:str='',store_id:int|None=None,online:int|None=None,attention:int|None=None,unassigned:int|None=None,agent_state:str='',priority:bool=True,page:int=1,limit_:int=50,u=Depends(user),s:Session=Depends(db)):
  models=visible(s,u);assigned=assigned_ts(s,[d.id for d in models]);all_rows=[{**serialize(d),'ts_names':assigned[d.id]} for d in models]
- facets={'all':len(all_rows),'online':sum(d['online'] for d in all_rows),'offline':sum(not d['online'] for d in all_rows),'attention':sum(needs_attention(d) for d in all_rows),'agent_old':sum(d['agent']['status']!='current' for d in all_rows)}
+ facets={'all':len(all_rows),'online':sum(d['online'] for d in all_rows),'offline':sum(not d['online'] for d in all_rows),'attention':sum(needs_attention(d) for d in all_rows),'unassigned':sum(len(d['ts_names'])==0 for d in all_rows),'agent_old':sum(d['agent']['status']!='current' for d in all_rows)}
  query=q.strip().casefold();rows=[]
  for row in all_rows:
   haystack=' '.join((row.get('hostname') or '',row.get('ip') or '',row.get('store_code') or '',*row.get('ts_names',[]))).casefold()
   if query not in haystack or (store_id is not None and row['store_id']!=store_id):continue
   if online is not None and row['online']!=(online==1):continue
   if attention is not None and needs_attention(row)!=(attention==1):continue
+  if unassigned is not None and (len(row.get('ts_names',[]))==0)!=(unassigned==1):continue
   if agent_state=='old' and row['agent']['status']=='current':continue
   rows.append(row)
  if priority:rows.sort(key=device_priority)

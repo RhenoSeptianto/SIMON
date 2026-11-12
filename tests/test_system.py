@@ -255,3 +255,21 @@ def test_system_health_endpoint_details():
  assert 'pool' in data
  assert isinstance(data['pool'], dict)
  assert 'server_time' in data
+
+
+def test_devices_unassigned_filter():
+ from backend.main import attempts,UserDeviceAccess
+ attempts.clear()
+ with DB() as s:
+  adm=User(name='Filter Admin',username='filteradmin',password=password('1'),role='super_admin',active=1)
+  ts=User(name='Filter TS',username='filterts',password=password('1'),role='ts',active=1)
+  d1=Device(uuid=str(uuid.uuid4()),hostname='ASSIGNED-FILTER-PC',claim='unused',status='approved')
+  d2=Device(uuid=str(uuid.uuid4()),hostname='UNASSIGNED-FILTER-PC',claim='unused',status='approved')
+  s.add_all([adm,ts,d1,d2]);s.flush()
+  s.add(UserDeviceAccess(user_id=ts.id,device_id=d1.id));s.commit()
+ c=TestClient(app);c.post('/api/login',json={'username':'filteradmin','password':'1'})
+ res=c.get('/api/devices?unassigned=1&limit_=500').json()
+ names=[x['hostname'] for x in res['items']]
+ assert 'UNASSIGNED-FILTER-PC' in names
+ assert 'ASSIGNED-FILTER-PC' not in names
+ assert res['facets']['unassigned']>=1
