@@ -111,10 +111,8 @@ try:
     if section=='Users':
      expect(page.locator('.pc-count-badge').first).to_have_text('1 PC')
     if section=='Updates':
-     expect(page.get_by_role('heading',name='Update aplikasi SIMON')).to_be_visible()
+     expect(page.get_by_role('heading',name='Update Agent SIMON')).to_be_visible()
      expect(page.get_by_role('heading',name='Paket agent store')).to_be_visible()
-     expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_disabled()
-     expect(page.get_by_text('Pemasangan awal diperlukan satu kali')).to_be_visible()
     if section=='Reports':
      expect(page.get_by_role('link',name='Unduh Excel')).to_be_visible()
      expect(page.locator('#reportFilter')).to_be_visible()
@@ -184,10 +182,17 @@ try:
   expect(page.locator('#startAgentRollout')).to_have_text('Sedang memperbarui agent...')
   page.screenshot(path=str(target/'updater-agent-rollout.png'),full_page=True)
   agent_state['rollout']={'state':'completed','busy':False,'total':5,'done':5,'in_progress':0,'queued':0,'failed':0,'max_concurrent':3,'message':'Update massal selesai: 5/5 PC berhasil diperbarui.'}
-  expect(page.locator('.nav-update-available')).to_be_hidden()
+  page.get_by_role('button',name='Keluar',exact=True).click()
+  expect(page.locator('#loginTheme')).to_be_visible()
+  was_dark=page.evaluate("document.body.classList.contains('dark')")
+  page.locator('#loginTheme').click()
+  assert page.evaluate("document.body.classList.contains('dark')")!=was_dark
+  page.locator('#loginTheme').click()
+  assert page.evaluate("document.body.classList.contains('dark')")==was_dark
+  page.locator('#loginUpdateBtn').click()
+  expect(page.get_by_role('heading',name='Update aplikasi SIMON',exact=True)).to_be_visible()
   expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_enabled()
   page.get_by_role('button',name='Cek update',exact=True).click()
-  expect(page.locator('.nav-update-available')).to_be_visible()
   expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_enabled()
   page.get_by_role('button',name='Update sekarang',exact=True).click()
   expect(page.get_by_text('Update gagal, versi sebelumnya berhasil dipulihkan.',exact=True)).to_be_visible(timeout=12000)
@@ -196,12 +201,24 @@ try:
   update_success[0]=True
   with page.expect_navigation(timeout=15000,wait_until='domcontentloaded'):
    page.get_by_role('button',name='Update sekarang',exact=True).click()
+  expect(page.get_by_role('button',name='Keluar',exact=True)).to_be_visible(timeout=10000)
+  page.get_by_role('button',name='Keluar',exact=True).click()
+  page.locator('#loginUpdateBtn').click()
   expect(page.get_by_text('Update berhasil. Server sudah siap digunakan.',exact=True)).to_be_visible(timeout=10000)
   expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_disabled()
-  expect(page.locator('.nav-update-available')).to_be_hidden()
   page.screenshot(path=str(target/'updater-success.png'),full_page=True)
-
+  page.locator('#closeLoginUpdateModal').click()
   page.unroute('**/api/system/update/status',updater_status)
+  page.locator('#loginUpdateBtn').click()
+  expect(page.locator('#loginUpdateAuthForm')).to_be_visible()
+  page.locator('#loginUpdateAuthForm [name=username]').fill('qaadmin')
+  page.locator('#loginUpdateAuthForm [name=password]').fill('1')
+  page.locator('#loginUpdateAuthBtn').click()
+  expect(page.get_by_role('heading',name='Update aplikasi SIMON',exact=True)).to_be_visible()
+  page.locator('#closeLoginUpdateModal').click()
+  page.locator('[name=username]').fill('qaadmin');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
+  expect(page.get_by_role('button',name='Alerts',exact=True)).to_be_visible()
+
   page.unroute('**/api/system/update/check',updater_check)
   page.unroute('**/api/system/update/start',updater_start)
   page.unroute('**/api/system/agent-package/status')

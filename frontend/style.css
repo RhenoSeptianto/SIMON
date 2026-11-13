@@ -245,3 +245,5 @@ body.dark .ado-log-do { color: #2dd4bf; }
 .ado-timeline-date { font-size: 12px; font-weight: 600; }
 .ado-timeline-actor { font-size: 11.5px; color: var(--muted); }
 .ado-timeline-desc { font-size: 12.5px; line-height: 1.4; }
+.login-top-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.login-top-actions { display: flex; align-items: center; gap: 8px; }

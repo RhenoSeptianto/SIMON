@@ -26,11 +26,18 @@ function updateCard(data){
  if(rollout.busy&&!rolloutObservedStart)rolloutObservedStart=Number(rollout.started_at)||Date.now()/1000;
  if(!rollout.busy)rolloutObservedStart=null;
  const issues=job.error||job.rollback_error;
- return `<article class="card update-panel" id="updatePanel"><div class="card-heading"><div><h3>Update aplikasi SIMON</h3><p>Web dan server diperbarui dari repo SIMON, branch main.</p></div><span class="subtle-badge">Khusus Super Admin</span></div><div class="update-versions"><div><small>Versi terpasang</small><strong>${esc(data.version)}</strong><code>${esc((data.current||'Belum tercatat').slice(0,12))}</code></div><div><small>Versi terbaru</small><strong>${checked.latest?esc(checked.latest_version||checked.latest.slice(0,8)):'Belum diperiksa'}</strong><code>${checked.latest?esc(checked.latest.slice(0,12)):'Klik Cek update'}</code></div></div>${!data.ready?`<div class="update-notice"><b>Pemasangan awal diperlukan satu kali</b><p>${esc(data.setup_message)}</p><code>deployment/server/setup-updater.bat</code></div>`:''}${updateProgress(job,busy||data.maintenance)}<div class="update-result" role="status"><b>${esc(updateLabels[job.state]||'Status update')}</b><p>${esc(job.message||'Klik Cek update untuk memeriksa versi terbaru.')}</p>${checked.latest&&!busy&&!available&&job.state==='idle'?'<p>SIMON sudah memakai versi terbaru.</p>':''}${issues?`<p class="error">${esc(job.error||'')} ${esc(job.rollback_error||'')}</p>`:''}</div>${checked.changes?.length?`<details class="update-changes"><summary>Perubahan yang tersedia</summary><ul>${checked.changes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}<div class="toolbar"><button id="checkUpdate" class="secondary" ${!data.ready||busy||data.maintenance?'disabled':''}>Cek update</button><button id="startUpdate" data-target="${esc(checked.latest||'')}" ${!data.ready||!available||busy||data.maintenance?'disabled':''}>Update sekarang</button><button id="showUpdateLog" class="link-button">Lihat log</button></div><p id="updateError" class="error" role="alert"></p><pre id="updateLog" class="update-log" hidden></pre><p class="device-note">Backup database dibuat sebelum pemasangan. Jika versi baru gagal, helper memulihkan aplikasi dan database sebelumnya. Halaman dapat terputus sementara saat restart.</p>${agentPackageCard(data)}</article>`;
+ return `<article class="card update-panel" id="updatePanel" data-update-mode="app"><div class="card-heading"><div><h3>Update aplikasi SIMON</h3><p>Web dan server diperbarui dari repo SIMON, branch main.</p></div><span class="subtle-badge">Khusus Super Admin</span></div><div class="update-versions"><div><small>Versi terpasang</small><strong>${esc(data.version)}</strong><code>${esc((data.current||'Belum tercatat').slice(0,12))}</code></div><div><small>Versi terbaru</small><strong>${checked.latest?esc(checked.latest_version||checked.latest.slice(0,8)):'Belum diperiksa'}</strong><code>${checked.latest?esc(checked.latest.slice(0,12)):'Klik Cek update'}</code></div></div>${!data.ready?`<div class="update-notice"><b>Pemasangan awal diperlukan satu kali</b><p>${esc(data.setup_message)}</p><code>deployment/server/setup-updater.bat</code></div>`:''}${updateProgress(job,busy||data.maintenance)}<div class="update-result" role="status"><b>${esc(updateLabels[job.state]||'Status update')}</b><p>${esc(job.message||'Klik Cek update untuk memeriksa versi terbaru.')}</p>${checked.latest&&!busy&&!available&&job.state==='idle'?'<p>SIMON sudah memakai versi terbaru.</p>':''}${issues?`<p class="error">${esc(job.error||'')} ${esc(job.rollback_error||'')}</p>`:''}</div>${checked.changes?.length?`<details class="update-changes"><summary>Perubahan yang tersedia</summary><ul>${checked.changes.map(line=>`<li>${esc(line)}</li>`).join('')}</ul></details>`:''}<div class="toolbar"><button id="checkUpdate" class="secondary" ${!data.ready||busy||data.maintenance?'disabled':''}>Cek update</button><button id="startUpdate" data-target="${esc(checked.latest||'')}" ${!data.ready||!available||busy||data.maintenance?'disabled':''}>Update sekarang</button><button id="showUpdateLog" class="link-button">Lihat log</button></div><p id="updateError" class="error" role="alert"></p><pre id="updateLog" class="update-log" hidden></pre><p class="device-note">Backup database dibuat sebelum pemasangan. Jika versi baru gagal, helper memulihkan aplikasi dan database sebelumnya. Halaman dapat terputus sementara saat restart.</p></article>`;
+}
+function agentUpdateCard(data){
+ const rollout=agentPackageState.rollout||{};
+ updateNeedsPolling=Boolean(data.busy||data.maintenance||rollout.busy);
+ if(rollout.busy&&!rolloutObservedStart)rolloutObservedStart=Number(rollout.started_at)||Date.now()/1000;
+ if(!rollout.busy)rolloutObservedStart=null;
+ return `<article class="card update-panel" id="updatePanel" data-update-mode="agent"><div class="card-heading"><div><h3>Update Agent SIMON</h3><p>Kelola paket installer agent store dan pembaruan massal PC yang sedang online.</p></div><span class="subtle-badge">Versi Server ${esc(data.version)}</span></div>${agentPackageCard(data)}<p class="device-note" style="margin-top:14px;margin-bottom:0">Catatan: Update aplikasi Web &amp; Server (SIMON + ADO) kini dilakukan dari <b>halaman Login</b> melalui tombol <b>Update</b>.</p></article>`;
 }
 function reloadAfterUpdate(data){if(data.job?.state==='success'&&!data.busy&&!data.maintenance&&updateLoadedCommit&&data.current!==updateLoadedCommit){sessionStorage.setItem('simonUpdateView','1');window.location.reload();return true;}return false;}
-async function updatesMarkup(){const [data,agent]=await Promise.all([api('system/update/status'),api('system/agent-package/status')]);agentPackageState=agent;if(typeof applyUpdateIndicator==='function')applyUpdateIndicator(data);if(reloadAfterUpdate(data))return '<p>Memuat versi terbaru...</p>';return updateCard(data);}
-function replaceUpdatePanel(data){if(typeof applyUpdateIndicator==='function')applyUpdateIndicator(data);if(reloadAfterUpdate(data))return;const panel=document.querySelector('#updatePanel');if(!panel||view!=='Updates')return;const log=panel.querySelector('#updateLog'),saved=log&&!log.hidden?log.textContent:null;panel.outerHTML=updateCard(data);bindUpdates();if(saved!==null){const output=document.querySelector('#updateLog');output.textContent=saved;output.hidden=false;}}
+async function updatesMarkup(){const [data,agent]=await Promise.all([api('system/update/status'),api('system/agent-package/status')]);agentPackageState=agent;if(typeof applyUpdateIndicator==='function')applyUpdateIndicator(data);if(reloadAfterUpdate(data))return '<p>Memuat versi terbaru...</p>';return agentUpdateCard(data);}
+function replaceUpdatePanel(data){if(typeof applyUpdateIndicator==='function')applyUpdateIndicator(data);if(reloadAfterUpdate(data))return;const panel=document.querySelector('#updatePanel');if(!panel)return;const mode=panel.dataset.updateMode;if(mode==='agent'&&view!=='Updates')return;const log=panel.querySelector('#updateLog'),saved=log&&!log.hidden?log.textContent:null;panel.outerHTML=(mode==='agent'?agentUpdateCard(data):updateCard(data));bindUpdates();if(saved!==null){const output=document.querySelector('#updateLog');if(output){output.textContent=saved;output.hidden=false;}}}
 function bindUpdates(){
  const check=document.querySelector('#checkUpdate'),start=document.querySelector('#startUpdate'),logs=document.querySelector('#showUpdateLog'),prepare=document.querySelector('#prepareAgentPackage'),rolloutBtn=document.querySelector('#startAgentRollout');
  if(check)check.onclick=async()=>{updateActionBusy=true;check.disabled=true;const original=check.textContent;check.textContent='Memeriksa...';const error=document.querySelector('#updateError');error.textContent='';try{await api('system/update/check',{});replaceUpdatePanel(await api('system/update/status'));}catch(e){if(error.isConnected)error.textContent=e.message;}finally{updateActionBusy=false;if(check.isConnected){check.disabled=false;check.textContent=original;}}};
@@ -39,22 +46,75 @@ function bindUpdates(){
  if(prepare)prepare.onclick=async()=>{prepare.disabled=true;prepare.textContent='Mengambil agent...';const error=document.querySelector('#agentPackageError');error.textContent='';try{agentPackageState=await api('system/agent-package/prepare',{});toast('Paket agent terbaru siap diunduh.');replaceUpdatePanel(await api('system/update/status'));}catch(e){if(error.isConnected)error.textContent=e.message;toast(e.message,'error');prepare.disabled=false;prepare.textContent='Ambil agent terbaru';}};
  if(rolloutBtn)rolloutBtn.onclick=async()=>{updateActionBusy=true;updateNeedsPolling=true;rolloutBtn.disabled=true;rolloutBtn.textContent='Memulai update massal...';const error=document.querySelector('#agentPackageError');if(error)error.textContent='';try{agentPackageState=await api('system/agent-package/rollout',{});toast('Update massal agent online dimulai.');replaceUpdatePanel(await api('system/update/status'));}catch(e){if(error&&error.isConnected)error.textContent=e.message;toast(e.message,'error');if(rolloutBtn.isConnected){rolloutBtn.disabled=false;rolloutBtn.textContent='Update semua agent online';}}finally{updateActionBusy=false;}};
 }
+async function openLoginUpdateModal(){
+ const d=document.querySelector('#dialog');
+ if(!d)return;
+ d.style.maxWidth='760px';
+ d.innerHTML=`<div class="loading-state"><div></div><p>Memeriksa akses Super Admin...</p></div>`;
+ if(!d.open)d.showModal();
+ const renderAppUpdate=(data)=>{
+  d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><h2 style="margin:0">Update Aplikasi SIMONDO</h2><button type="button" id="closeLoginUpdateModal" class="secondary compact">Tutup</button></div>${updateCard(data)}`;
+  document.querySelector('#closeLoginUpdateModal').onclick=()=>d.close();
+  bindUpdates();
+ };
+ try{
+  const r=await fetch('/api/system/update/status',{cache:'no-store'});
+  if(r.ok){renderAppUpdate(await r.json());return;}
+ }catch{}
+ d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"><h2 style="margin:0">Update Aplikasi SIMONDO</h2><button type="button" id="closeLoginUpdateModal" class="secondary compact">Tutup</button></div>
+  <p class="muted" style="margin-top:0">Masukkan akun <b>Super Admin</b> untuk memeriksa dan menjalankan pembaruan aplikasi SIMON &amp; ADO.</p>
+  <form id="loginUpdateAuthForm">
+   <label>Username Super Admin</label>
+   <input name="username" autocomplete="username" required>
+   <label>Password</label>
+   <input name="password" type="password" autocomplete="current-password" required>
+   <p class="error" id="loginUpdateAuthErr"></p>
+   <p><button type="submit" id="loginUpdateAuthBtn">Verifikasi &amp; Buka Update</button></p>
+  </form>`;
+ document.querySelector('#closeLoginUpdateModal').onclick=()=>d.close();
+ document.querySelector('#loginUpdateAuthForm').onsubmit=async e=>{
+  e.preventDefault();
+  const btn=document.querySelector('#loginUpdateAuthBtn');
+  const errEl=document.querySelector('#loginUpdateAuthErr');
+  errEl.textContent='';
+  btn.disabled=true;
+  try{
+   const creds=Object.fromEntries(new FormData(e.target));
+   const u=await api('login',creds);
+   if(u.role!=='super_admin'){
+    errEl.textContent='Hanya akun Super Admin yang dapat melakukan update aplikasi.';
+    btn.disabled=false;
+    return;
+   }
+   const st=await api('system/update/status');
+   renderAppUpdate(st);
+  }catch(err){
+   errEl.textContent=err.message;
+   btn.disabled=false;
+  }
+ };
+}
 setInterval(()=>{
  if(!updateNeedsPolling||view!=='Updates'||document.hidden)return;
  const timer=document.querySelector('#agentRolloutTimer');
  if(timer&&agentPackageState.rollout?.busy)timer.textContent='Berjalan '+rolloutElapsed(agentPackageState.rollout);
 },1000);
 setInterval(async()=>{
- if(!updateNeedsPolling||updatePolling||updateActionBusy||!me||view!=='Updates'||document.hidden||!document.querySelector('#updatePanel'))return;
+ const panel=document.querySelector('#updatePanel');
+ if(!updateNeedsPolling||updatePolling||updateActionBusy||document.hidden||!panel)return;
+ const mode=panel.dataset.updateMode;
+ if(mode==='agent'&&(!me||view!=='Updates'))return;
  // Keep controls steady while someone is checking; fetch status only, never trigger a Git fetch here.
  updatePolling=true;
  try{
-  const [response,agentRes]=await Promise.all([fetch('/api/system/update/status',{cache:'no-store'}),fetch('/api/system/agent-package/status',{cache:'no-store'})]);
-  if(response.status===401||agentRes.status===401){login();return;}
+  const fetches=[fetch('/api/system/update/status',{cache:'no-store'})];
+  if(mode==='agent')fetches.push(fetch('/api/system/agent-package/status',{cache:'no-store'}));
+  const [response,agentRes]=await Promise.all(fetches);
+  if(response.status===401||(agentRes&&agentRes.status===401)){login();return;}
   if(!response.ok)throw Error('Server sedang restart. Menunggu tersambung kembali...');
   const result=await response.json();
-  if(agentRes.ok)agentPackageState=await agentRes.json();
-  if(view==='Updates'&&me)replaceUpdatePanel(result);
+  if(agentRes&&agentRes.ok)agentPackageState=await agentRes.json();
+  if(document.querySelector('#updatePanel'))replaceUpdatePanel(result);
  }catch(e){const state=document.querySelector('#updatePanel .update-result');if(state)state.textContent='Koneksi sementara terputus. Menunggu server dan hasil update...';}
  finally{updatePolling=false;}
 },3000);
