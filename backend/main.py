@@ -644,6 +644,8 @@ def agent_update_status(v:AgentUpdateStatus,d=Depends(agent)):
  from backend.agent_packages import record_device_update_status
  return record_device_update_status(DATA,current_update_sha(),d.id,v.state,v.error)
 
+from backend.ado import router as ado_router
+app.include_router(ado_router)
 app.mount('/static',StaticFiles(directory=ROOT/'frontend'),name='static')
 @app.get('/')
 def index(): return FileResponse(ROOT/'frontend'/'index.html')

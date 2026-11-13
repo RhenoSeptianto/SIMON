@@ -301,4 +301,64 @@ def test_security_headers_and_400_store_optimizations():
   assert json.loads(d.metrics).get('last_history_at')==t0
 
 
+def test_ado_full_workflow_and_roles():
+ from openpyxl import load_workbook
+ from io import BytesIO
+ with DB() as s:
+  s.add(User(name='Super ADO',username='superado',password=password('1'),role='super_admin',active=1))
+  s.commit()
+ super_c=TestClient(app)
+ assert super_c.post('/api/ado/login',json={'username':'superado','password':'1'}).status_code==200
+ assert super_c.get('/api/ado/me').json()['role']=='super_admin'
+ assert super_c.post('/api/ado/catalog',headers=H,json={'kind':'device','group_type':'PERANGKAT','parent_category':'Pos 1','name':'SCANNER ZEBRA'}).status_code==200
+ cat_data=super_c.get('/api/ado/catalog').json()
+ assert any(d['name']=='SCANNER ZEBRA' and d['parent_category']=='Pos 1' for d in cat_data['devices'])
+ tiny_png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+ r_it=super_c.post('/api/ado/users',headers=H,json={'name':'Vani','username':'vani','password':'1','role':'admin_it','active':True,'signature_data':tiny_png})
+ assert r_it.status_code==200
+ r_ts=super_c.post('/api/ado/users',headers=H,json={'name':'Rheno TS','username':'rhenots','password':'1','role':'ts','active':True})
+ assert r_ts.status_code==200
+ ts_id=r_ts.json()['id']
+
+ it_c=TestClient(app)
+ assert it_c.post('/api/ado/login',json={'username':'vani','password':'1'}).status_code==200
+ assert it_c.get('/api/ado/me').json()['signature_data']==tiny_png
+ st1=it_c.post('/api/ado/stores',headers=H,json={'store_code':'00115','name':'HokBen Mall Grand Indonesia','region':'Jabodetabek','store_type':'Existing Store','ts_user_id':ts_id}).json()['id']
+ st2=it_c.post('/api/ado/stores',headers=H,json={'store_code':'00201','name':'HokBen Bandung','region':'Luar Jabodetabek','store_type':'New Store','ts_user_id':ts_id}).json()['id']
+
+ ts_c=TestClient(app)
+ assert ts_c.post('/api/ado/login',json={'username':'rhenots','password':'1'}).status_code==200
+ do_res=ts_c.post('/api/ado/do',headers=H,json={'store_id':st1,'store_type':'Existing Store','items':[{'category':'Pos 1','device_name':'SCANNER ZEBRA','brand':'ZEBRA','serial_number':'SN-ZEB-001','purchase_year':2023,'notes':'Unit baru'},{'category':'Back Office','device_name':'UPS','brand':'WEARNES','serial_number':'W23G00725','purchase_year':2023,'notes':''}]})
+ assert do_res.status_code==200
+ do_id=do_res.json()['id']
+ assert '/DO/IT/001/' in do_res.json()['do_number']
+ assert ts_c.post(f'/api/ado/do/{do_id}/confirm',headers=H).status_code==403
+
+ conf_res=it_c.post(f'/api/ado/do/{do_id}/confirm',headers=H,json={'do_number':'XI/DO/IT/099/2026','delivery_date':'2026-11-12','confirmed_by':'Vani','approved_signature':tiny_png})
+ assert conf_res.status_code==200 and conf_res.json()['added_assets']==2 and conf_res.json()['do_number']=='XI/DO/IT/099/2026'
+ print_res=it_c.get(f'/api/ado/do/{do_id}/print')
+ assert print_res.status_code==200
+ assert 'DELIVERY ORDER FORM' in print_res.text
+ assert 'HBG/SUP/FRM/B.04/1' in print_res.text
+ assert 'XI/DO/IT/099/2026' in print_res.text
+ assert '12 November 2026' in print_res.text
+ assert 'PT. EKA BOGAINTI' in print_res.text
+ assert 'HOKBEN MALL GRAND INDONESIA' in print_res.text
+ assert 'ZEBRA / SCANNER ZEBRA' in print_res.text
+ assert 'Vani' in print_res.text
+ assert tiny_png in print_res.text
+ assert 'Rheno TS' in print_res.text
+ assets=ts_c.get('/api/ado/assets').json()
+ assert len(assets)==2
+ assert any(a['serial_number']=='W23G00725' and 'Tahun' in a['age_label'] for a in assets)
+
+ asset_id=assets[0]['id']
+ assert ts_c.post('/api/ado/mutations',headers=H,json={'asset_id':asset_id,'to_store_id':st2,'notes':'Relokasi'}).status_code==200
+ assert len(it_c.get('/api/ado/mutations').json())==1
+
+ wb=load_workbook(BytesIO(it_c.get('/api/ado/reports/xlsx').content))
+ assert wb.sheetnames==['Data Perangkat Store','History DO']
+
+
+
 

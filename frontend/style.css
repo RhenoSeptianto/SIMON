@@ -135,3 +135,86 @@ thead th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(
 .report-filter-bar { margin: 0 0 16px; }
 .report-filter-bar label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--muted); }
 .report-filter-bar select { width: 100%; }
+
+/* === LOGIN PORTAL SELECTOR (SIMON vs ADO) & ADO STYLES === */
+.portal-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 5px; background: var(--hover); border: 1px solid var(--line); border-radius: 11px; margin-bottom: 22px; }
+button.portal-choice { background: transparent; color: var(--muted); border: 1px solid transparent; border-radius: 8px; padding: 10px 14px; text-align: left; transition: all .15s ease; }
+button.portal-choice:hover { background: var(--panel); color: inherit; filter: none; }
+button.portal-choice.active { background: var(--panel); color: inherit; border-color: var(--accent); box-shadow: 0 2px 8px #0001; }
+button.portal-choice b { display: block; font-size: 14px; color: inherit; letter-spacing: .5px; }
+button.portal-choice.active b { color: var(--accent); }
+button.portal-choice small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
+.ado-kpis .kpi-card { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; color: #fff; border: 0; }
+.ado-kpis .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px #0002; }
+.ado-kpis .kpi-card .kpi-label, .ado-kpis .kpi-card small { color: rgba(255,255,255,.88); }
+.ado-kpi-teal { background: linear-gradient(135deg, #1693a5, #127988); }
+.ado-kpi-cyan { background: linear-gradient(135deg, #18889b, #0f6b7c); }
+.ado-kpi-green { background: linear-gradient(135deg, #28a745, #1e8436); }
+.ado-kpi-amber { background: linear-gradient(135deg, #f3b61f, #d99b08); color: #1d252c !important; }
+.ado-kpi-amber .kpi-label, .ado-kpi-amber small { color: rgba(29,37,44,.85) !important; }
+.ado-kpi-red { background: linear-gradient(135deg, #dc3545, #b82533); }
+
+.ado-new-badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 6px; background: #1aa3b8; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .3px; }
+.ado-tab-bar { display: flex; gap: 8px; margin: 0 0 16px; border-top: 3px solid #f3b61f; background: var(--panel); padding: 12px 16px; border-radius: 10px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+button.ado-tab-btn { background: var(--hover); color: inherit; border: 1px solid var(--line); padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+button.ado-tab-btn.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+.ado-do-panel { border-top: 3px solid #f3b61f; overflow: hidden; }
+.ado-do-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.62fr) minmax(0, 1.15fr) auto; gap: 10px; align-items: end; }
+.ado-do-grid > div { min-width: 0; }
+.ado-do-grid input, .ado-do-grid select { width: 100%; min-width: 0; padding: 8px 10px; font-size: 13px; }
+.ado-do-grid label { display: block; margin: 0 0 6px; font-weight: 600; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ado-add-btn { width: auto; background: #0c8278; color: #fff; white-space: nowrap; height: 40px; padding: 0 15px; border-radius: 8px; }
+.ado-save-btn { background: #1f9d55; color: #fff; padding: 10px 20px; border-radius: 8px; }
+.ado-scan-btn { background: #1892a8; color: #fff; padding: 7px 13px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; }
+.ado-confirm-btn { background: #28a745; color: #fff; padding: 6px 12px; font-size: 11.5px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+.ado-confirmed-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 20px; background: #e8f7ee; color: #16805d; font-size: 11px; font-weight: 600; }
+.dark .ado-confirmed-pill { background: #193b34; color: #89d8b1; }
+.ado-status-dot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; color: #fff; }
+.ado-status-ok { background: #28a745; }
+.ado-status-warn { background: #e8a317; }
+.ado-status-bad { background: #dc3545; }
+
+/* Master Perangkat per Area cards */
+.ado-area-create-bar { border-left: 4px solid var(--accent); padding: 18px 20px; margin-bottom: 18px; }
+.ado-area-create-form { display: grid; grid-template-columns: 1.5fr 1.2fr auto; gap: 12px; align-items: end; }
+.ado-area-create-form label { margin: 0 0 6px; font-weight: 600; font-size: 12px; }
+.ado-area-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ado-area-card { display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; border-top: 3px solid var(--accent); padding: 20px; }
+.ado-area-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.ado-area-head h4 { margin: 0; font-size: 16px; font-weight: 650; }
+.ado-area-devices { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0; min-height: 62px; align-content: flex-start; }
+.ado-device-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 8px; background: var(--hover); border: 1px solid var(--line); font-size: 12px; }
+.ado-device-pill b { font-weight: 600; }
+.ado-device-pill button { background: transparent; color: #cf535a; border: 0; padding: 0 2px; font-size: 15px; line-height: 1; font-weight: 700; }
+.ado-device-pill button:hover { filter: none; opacity: .75; }
+.ado-area-add-form { display: flex; gap: 8px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.ado-area-add-form input { flex: 1; min-height: 36px; padding: 7px 11px; font-size: 12px; }
+.ado-area-add-form button { min-height: 36px; padding: 7px 14px; font-size: 12px; white-space: nowrap; }
+@media(max-width:1050px){ .ado-do-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ado-add-btn { width: 100%; } .ado-area-grid { grid-template-columns: 1fr; } .ado-area-create-form { grid-template-columns: 1fr; } }
+@media(max-width:650px){ .ado-do-grid { grid-template-columns: 1fr; } }
+.ado-confirm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.ado-confirm-grid > div { min-width: 0; }
+.ado-confirm-grid input, .ado-confirm-grid select { width: 100%; min-width: 0; }
+.ado-confirm-grid label { margin-top: 4px; display: block; font-size: 12px; font-weight: 600; }
+.ado-confirm-items { display: flex; flex-direction: column; gap: 8px; max-height: 210px; overflow-y: auto; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--hover); }
+.ado-confirm-item-row { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr) auto; gap: 6px; align-items: center; }
+.ado-confirm-item-row input, .ado-confirm-item-row select { margin: 0; padding: 6px 8px; font-size: 12.5px; min-width: 0; width: 100%; }
+.ado-sig-panel { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--hover); }
+.ado-sig-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+.ado-sig-canvas { width: 100%; height: 105px; background: #fff; border: 1px dashed #94a3b8; border-radius: 8px; cursor: crosshair; touch-action: none; display: block; }
+.ado-sig-preview { min-height: 105px; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 8px; }
+.ado-sig-upload-box { min-height: 105px; margin: 0; border: 1.5px dashed #0d9488; border-radius: 8px; background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 12px; gap: 4px; cursor: pointer; transition: background .15s, border-color .15s; }
+.ado-sig-upload-box:hover { background: var(--soft); border-color: #0c8278; }
+.ado-sig-upload-box b { font-size: 13px; color: var(--accent); }
+.ado-sig-upload-box small { font-size: 11px; color: var(--muted); }
+@media(max-width:720px){ .ado-confirm-grid, .ado-sig-body, .ado-confirm-item-row { grid-template-columns: 1fr; } }
+.ado-sidebar { padding: 20px 16px 16px; }
+.ado-sidebar .brand { margin-bottom: 20px; }
+.ado-sidebar .nav-caption { margin-bottom: 8px; }
+.ado-sidebar nav { flex: 1; min-height: 0; overflow-y: auto; gap: 3px; padding-right: 2px; }
+.ado-sidebar nav button { padding: 9px 12px; font-size: 12.5px; }
+.ado-sidebar .sidebar-bottom { padding-top: 14px; margin-top: 10px; }
+.ado-year-tip { position: relative; display: inline-block; font-weight: 600; border-bottom: 1.5px dashed var(--accent); cursor: pointer; padding-bottom: 1px; }
+.ado-year-tip:hover::after, .ado-year-tip:focus::after { content: attr(data-year-tip); position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%); background: #102630; color: #fff; padding: 5px 10px; border-radius: 7px; font-size: 11.5px; font-weight: 600; white-space: nowrap; box-shadow: 0 6px 18px #0004; z-index: 30; pointer-events: none; }
+.ado-year-tip:hover::before, .ado-year-tip:focus::before { content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #102630; z-index: 30; pointer-events: none; }
