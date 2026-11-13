@@ -212,9 +212,9 @@ function adoStoreRowHtml(st) {
 
 function renderAdoStores() {
  const rows = adoStores.map(adoStoreRowHtml);
- return `<div class="page-heading"><div><span class="eyebrow">MASTER STORE</span><h2>${adoIsAdminOrIt() ? 'Data Store' : 'Store Saya'}</h2></div>${adoIsAdminOrIt() ? `<button id="addAdoStore">+ Add Store</button>` : ''}</div>
+ return `<div class="page-heading"><div><span class="eyebrow">MASTER STORE</span><h2>${adoIsAdminOrIt() ? 'Data Store' : 'Store Saya'}</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><a class="secondary compact" style="text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid var(--line)" href="/api/ado/stores/template">&#128229; Download Template (.xlsx)</a><button type="button" id="importAdoStoresBtn" class="secondary compact">&#128228; Import Store (.xlsx)</button>${adoIsAdminOrIt() ? `<button id="addAdoStore">+ Add Store</button>` : ''}</div></div>
  <div class="toolbar device-search"><input id="adoStoreSearch" placeholder="Cari kode store, nama store, wilayah, atau TS..." aria-label="Cari store"></div>
- <div class="card table-card" id="adoStoreTableWrap">${table(['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support', 'Asset Store', ''], rows, 'Belum ada store terdaftar', adoIsAdminOrIt() ? 'Klik tombol + Add Store untuk menambahkan kode store dan nama store.' : 'Belum ada store yang diassign ke akun TS kamu.')}</div>`;
+ <div class="card table-card" id="adoStoreTableWrap">${table(['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support', 'Asset Store', ''], rows, 'Belum ada store terdaftar', adoIsAdminOrIt() ? 'Klik + Add Store atau Import Store (.xlsx) dari template.' : 'Klik Download Template lalu Import Store (.xlsx) untuk menambahkan store pegangan kamu.')}</div>`;
 }
 
 function renderAdoConfirm() {
@@ -449,6 +449,7 @@ function bindAdoEvents() {
  }
 
  document.querySelector('#addAdoStore')?.addEventListener('click', () => showAdoStoreModal());
+ document.querySelector('#importAdoStoresBtn')?.addEventListener('click', showAdoStoreImportModal);
  document.querySelectorAll('[data-edit-store]').forEach(b => b.onclick = () => showAdoStoreModal(adoStores.find(x => x.id == b.dataset.editStore)));
  document.querySelectorAll('[data-store-assets]').forEach(b => b.onclick = () => showAdoStoreAssetsModal(adoStores.find(x => x.id == b.dataset.storeAssets)));
 
@@ -640,6 +641,51 @@ async function showAdoStoreAssetsModal(st) {
  } catch (e) {
   modal(`<h2>Asset Store</h2><p class="error">${esc(e.message)}</p>`);
  }
+}
+
+function showAdoStoreImportModal() {
+ modal(`<h2>Import Data Store (.xlsx)</h2>
+  <p class="muted" style="margin-top:0">Gunakan template Excel resmi agar kolom <b>Kode Store</b>, <b>Nama Store</b>, <b>Wilayah</b>, dan <b>Kategori Store</b> terbaca otomatis. ${adoMe?.role === 'ts' ? 'Store yang kamu import otomatis menjadi store pegangan akun kamu.' : ''}</p>
+  <p><a class="secondary compact" style="text-decoration:none;padding:8px 12px;border-radius:8px;border:1px solid var(--line);display:inline-flex" href="/api/ado/stores/template">&#128229; Download Template Excel (.xlsx)</a></p>
+  <form id="adoStoreImportForm">
+   <label>Pilih File Excel (.xlsx)</label>
+   <input type="file" id="storeImportFile" accept=".xlsx" required>
+   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:500">
+    <input type="checkbox" id="storeImportUpdateCheck" style="width:auto;margin:0" checked>
+    Update data store jika Kode Store sudah terdaftar
+   </label>
+   <div id="storeImportResult" style="margin-top:10px"></div>
+   <p><button type="submit" id="storeImportSubmitBtn">&#128228; Proses Import Store</button></p>
+  </form>`);
+ document.querySelector('#adoStoreImportForm').onsubmit = async e => {
+  e.preventDefault();
+  const file = document.querySelector('#storeImportFile')?.files?.[0];
+  if (!file) return;
+  const btn = document.querySelector('#storeImportSubmitBtn');
+  btn.disabled = true;
+  const reader = new FileReader();
+  reader.onload = async () => {
+   try {
+    const res = await adoApi('stores/import', {
+     content_base64: reader.result,
+     update_existing: Boolean(document.querySelector('#storeImportUpdateCheck')?.checked),
+    });
+    toast(`Import selesai: ${res.created} ditambahkan, ${res.updated} diupdate.`);
+    if (res.errors?.length) {
+     document.querySelector('#storeImportResult').innerHTML = `<p class="error" style="margin:0;font-size:12px">${res.errors.map(esc).join('<br>')}</p>`;
+     btn.disabled = false;
+     await renderAdo();
+    } else {
+     document.querySelector('dialog')?.close();
+     await renderAdo();
+    }
+   } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+   }
+  };
+  reader.readAsDataURL(file);
+ };
 }
 
 function showAdoStoreModal(st = {}) {

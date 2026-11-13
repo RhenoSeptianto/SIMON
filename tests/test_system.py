@@ -359,6 +359,19 @@ def test_ado_full_workflow_and_roles():
  wb=load_workbook(BytesIO(it_c.get('/api/ado/reports/xlsx').content))
  assert wb.sheetnames==['Data Perangkat Store','History DO']
 
+ import base64
+ tpl_bytes=ts_c.get('/api/ado/stores/template').content
+ tpl_wb=load_workbook(BytesIO(tpl_bytes))
+ assert tpl_wb.sheetnames==['Data Store','Panduan & Daftar TS']
+ imp_wb=load_workbook(BytesIO(tpl_bytes))
+ imp_ws=imp_wb['Data Store']
+ imp_ws.delete_rows(2,imp_ws.max_row)
+ imp_ws.append(['00305','HokBen Bekasi','Jabodetabek','Existing Store',''])
+ imp_buf=BytesIO(); imp_wb.save(imp_buf); imp_wb.close()
+ imp_res=ts_c.post('/api/ado/stores/import',headers=H,json={'content_base64':base64.b64encode(imp_buf.getvalue()).decode(),'update_existing':True})
+ assert imp_res.status_code==200 and imp_res.json()['created']==1
+ assert any(st['store_code']=='00305' and st['ts_user_id']==ts_id for st in ts_c.get('/api/ado/stores').json())
+
 
 
 

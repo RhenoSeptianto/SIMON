@@ -1,5 +1,5 @@
 """Modular ADO (Asset & Delivery Order) backend with isolated ado_* tables."""
-import io, json, secrets, hmac, time
+import base64, io, json, secrets, hmac, time
 from datetime import datetime, timedelta, timezone
 from html import escape
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -461,6 +461,144 @@ def delete_store(id: int, u: AdoUser = Depends(ado_super_admin), s: Session = De
  s.delete(st)
  s.commit()
  return {'ok': True}
+
+
+@router.get('/stores/template')
+def download_store_template(u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
+ from openpyxl import load_workbook  # noqa: F401
+ wb = Workbook()
+ ws = wb.active
+ ws.title = 'Data Store'
+ headers = ['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support']
+ ws.append(headers)
+ ws.freeze_panes = 'A2'
+ for cell in ws[1]:
+  cell.fill = PatternFill('solid', fgColor='145D59')
+  cell.font = Font(name='Calibri', size=11, color='FFFFFF', bold=True)
+  cell.alignment = Alignment(vertical='center', wrap_text=True)
+ widths = [16, 34, 20, 18, 24]
+ for idx, w in enumerate(widths, 1):
+  ws.column_dimensions[ws.cell(1, idx).column_letter].width = w
+ ts_example = u.username if u.role == 'ts' else 'dovi'
+ ws.append(['00115', 'HokBen Mall Grand Indonesia', 'Jabodetabek', 'Existing Store', ts_example])
+ ws.append(['00201', 'HokBen Bandung', 'Luar Jabodetabek', 'New Store', ts_example])
+ for row_idx in range(2, 200):
+  ws.cell(row=row_idx, column=1).number_format = '@'
+
+ ws_guide = wb.create_sheet('Panduan & Daftar TS')
+ ws_guide.append(['Kolom', 'Wajib?', 'Keterangan / Pilihan Valid'])
+ for cell in ws_guide[1]:
+  cell.fill = PatternFill('solid', fgColor='145D59')
+  cell.font = Font(name='Calibri', size=11, color='FFFFFF', bold=True)
+ ws_guide.append(['Kode Store', 'Wajib', 'Kode unik store (format teks agar angka 0 di depan tidak hilang, contoh: 00115)'])
+ ws_guide.append(['Nama Store', 'Wajib', 'Nama lengkap store, contoh: HokBen Mall Grand Indonesia'])
+ ws_guide.append(['Wilayah', 'Opsional', 'Isi: Jabodetabek atau Luar Jabodetabek (default: Jabodetabek)'])
+ ws_guide.append(['Kategori Store', 'Opsional', 'Isi: Existing Store atau New Store (default: Existing Store)'])
+ ws_guide.append(['Technical Support', 'Opsional', 'Isi username atau nama TS. Jika yang import akun TS, otomatis di-assign ke akun TS tersebut.'])
+ ws_guide.append([])
+ ws_guide.append(['Daftar Akun TS Aktif', 'Username', 'Nama'])
+ for ts_u in s.query(AdoUser).filter_by(role='ts', active=1).order_by(AdoUser.name).all():
+  ws_guide.append(['TS', ts_u.username, ts_u.name])
+ ws_guide.column_dimensions['A'].width = 22
+ ws_guide.column_dimensions['B'].width = 18
+ ws_guide.column_dimensions['C'].width = 72
+
+ out = io.BytesIO()
+ wb.save(out)
+ wb.close()
+ out.seek(0)
+ return StreamingResponse(
+  out,
+  media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  headers={'Content-Disposition': 'attachment; filename="Template-Import-Store-ADO.xlsx"'},
+ )
+
+
+class StoreImportInput(BaseModel):
+ content_base64: str = Field(min_length=10, max_length=7_000_000)
+ update_existing: bool = True
+
+
+def _clean_excel_code(val) -> str:
+ if val is None:
+  return ''
+ if isinstance(val, float) and val.is_integer():
+  return str(int(val))
+ return str(val).strip()
+
+
+@router.post('/stores/import')
+def import_stores_excel(v: StoreImportInput, u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
+ from openpyxl import load_workbook
+ raw_b64 = v.content_base64.split(',', 1)[-1].strip()
+ try:
+  raw_bytes = base64.b64decode(raw_b64, validate=True)
+  wb = load_workbook(io.BytesIO(raw_bytes), data_only=True)
+ except Exception as exc:
+  raise HTTPException(422, f'File Excel (.xlsx) tidak valid: {exc}')
+ ws = wb.active
+ ts_users = s.query(AdoUser).filter_by(role='ts').all()
+ ts_by_key = {}
+ for tu in ts_users:
+  ts_by_key[tu.username.strip().casefold()] = tu.id
+  ts_by_key[tu.name.strip().casefold()] = tu.id
+ existing_by_code = {st.store_code.strip().casefold(): st for st in s.query(AdoStore).all()}
+
+ created = 0
+ updated = 0
+ skipped = 0
+ errors = []
+
+ for row_num, row in enumerate(ws.iter_rows(values_only=True), 1):
+  if not row or all(cell is None or str(cell).strip() == '' for cell in row):
+   continue
+  code = _clean_excel_code(row[0] if len(row) > 0 else '')
+  name = str(row[1] if len(row) > 1 and row[1] is not None else '').strip()
+  if row_num == 1 and code.casefold() in ('kode store', 'store_code', 'kode'):
+   continue
+  if not code or not name:
+   errors.append(f'Baris {row_num}: Kode Store dan Nama Store wajib diisi')
+   continue
+  raw_region = str(row[2] if len(row) > 2 and row[2] is not None else '').strip()
+  raw_type = str(row[3] if len(row) > 3 and row[3] is not None else '').strip()
+  raw_ts = str(row[4] if len(row) > 4 and row[4] is not None else '').strip()
+  region = 'Luar Jabodetabek' if 'luar' in raw_region.casefold() else 'Jabodetabek'
+  st_type = 'New Store' if 'new' in raw_type.casefold() else 'Existing Store'
+  ts_id = u.id if u.role == 'ts' else ts_by_key.get(raw_ts.casefold())
+
+  key = code.casefold()
+  existing = existing_by_code.get(key)
+  if existing:
+   if u.role == 'ts' and existing.ts_user_id not in (None, u.id):
+    skipped += 1
+    errors.append(f'Baris {row_num}: Kode {code} sudah terdaftar pada TS lain')
+    continue
+   if v.update_existing:
+    existing.name = name[:200]
+    existing.region = region
+    existing.store_type = st_type
+    if u.role == 'ts':
+     existing.ts_user_id = u.id
+    elif ts_id is not None:
+     existing.ts_user_id = ts_id
+    updated += 1
+   else:
+    skipped += 1
+  else:
+   st = AdoStore(
+    store_code=code[:40],
+    name=name[:200],
+    region=region,
+    store_type=st_type,
+    ts_user_id=ts_id,
+   )
+   s.add(st)
+   existing_by_code[key] = st
+   created += 1
+
+ wb.close()
+ s.commit()
+ return {'ok': True, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors[:20]}
 
 
 def serialize_asset(a: AdoAsset, store_map: dict[int, AdoStore], current_year: int, do_map: dict[int, str] | None = None):
