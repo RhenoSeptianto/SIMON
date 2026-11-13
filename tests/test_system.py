@@ -356,6 +356,16 @@ def test_ado_full_workflow_and_roles():
  assert ts_c.post('/api/ado/mutations',headers=H,json={'asset_id':asset_id,'to_store_id':st2,'notes':'Relokasi'}).status_code==200
  assert len(it_c.get('/api/ado/mutations').json())==1
 
+ logs_res=ts_c.get(f'/api/ado/assets/{asset_id}/logs')
+ assert logs_res.status_code==200
+ logs_data=logs_res.json()
+ ev_types={l['event_type'] for l in logs_data['logs']}
+ assert 'do_masuk' in ev_types and 'mutasi' in ev_types
+ add_log=ts_c.post(f'/api/ado/assets/{asset_id}/logs',headers=H,json={'event_type':'perbaikan','event_date':'2026-11-13','description':'Ganti kabel LAN','update_status':True})
+ assert add_log.status_code==200 and add_log.json()['status']=='perbaikan'
+ updated_assets=ts_c.get('/api/ado/assets').json()
+ assert any(a['id']==asset_id and a['repair_count']==1 and a['status']=='perbaikan' for a in updated_assets)
+
  wb=load_workbook(BytesIO(it_c.get('/api/ado/reports/xlsx').content))
  assert wb.sheetnames==['Data Perangkat Store','History DO']
 

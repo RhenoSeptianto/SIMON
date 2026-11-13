@@ -127,6 +127,17 @@ class AdoMutation(Base):
  moved_at = Column(Float, default=now, index=True)
 
 
+class AdoAssetLog(Base):
+ __tablename__ = 'ado_asset_logs'
+ id = Column(Integer, primary_key=True)
+ asset_id = Column(Integer, ForeignKey('ado_assets.id', ondelete='CASCADE'), nullable=False, index=True)
+ event_type = Column(String(32), default='catatan', nullable=False)
+ event_date = Column(String(20), default='', nullable=False)
+ description = Column(Text, default='', nullable=False)
+ actor_name = Column(String(160), default='', nullable=False)
+ created_at = Column(Float, default=now, index=True)
+
+
 Base.metadata.create_all(engine)
 if 'parent_category' not in {col['name'] for col in inspect(engine).get_columns('ado_catalog')}:
  with engine.begin() as conn:
@@ -601,11 +612,37 @@ def import_stores_excel(v: StoreImportInput, u: AdoUser = Depends(ado_user), s: 
  return {'ok': True, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors[:20]}
 
 
-def serialize_asset(a: AdoAsset, store_map: dict[int, AdoStore], current_year: int, do_map: dict[int, str] | None = None):
+def add_asset_log(
+ s: Session,
+ asset_id: int,
+ event_type: str,
+ description: str,
+ actor_name: str,
+ event_date: str = '',
+):
+ ev_date = (event_date or '').strip() or datetime.now(WIB).strftime('%Y-%m-%d')
+ s.add(AdoAssetLog(
+  asset_id=asset_id,
+  event_type=event_type,
+  event_date=ev_date[:20],
+  description=(description or '').strip(),
+  actor_name=(actor_name or '').strip()[:160],
+  created_at=now(),
+ ))
+
+
+def serialize_asset(
+ a: AdoAsset,
+ store_map: dict[int, AdoStore],
+ current_year: int,
+ do_map: dict[int, str] | None = None,
+ log_counts: dict[int, dict[str, int]] | None = None,
+):
  st = store_map.get(a.store_id)
  age = max(0, current_year - (a.purchase_year or current_year))
  date_label = format_delivery_date_str(a.purchase_date, a.updated_at)
  do_num = (do_map or {}).get(a.do_id, '') if a.do_id else ''
+ counts = (log_counts or {}).get(a.id, {})
  return {
   'id': a.id,
   'store_id': a.store_id,
@@ -625,6 +662,9 @@ def serialize_asset(a: AdoAsset, store_map: dict[int, AdoStore], current_year: i
   'notes': a.notes,
   'do_id': a.do_id,
   'do_number': do_num,
+  'repair_count': counts.get('repair', 0),
+  'issue_count': counts.get('issue', 0),
+  'log_count': counts.get('total', 0),
   'updated_at': a.updated_at,
  }
 
@@ -655,8 +695,18 @@ def list_assets(
   o.id: o.do_number
   for o in s.query(AdoDeliveryOrder).filter(AdoDeliveryOrder.id.in_(do_ids)).all()
  } if do_ids else {}
+ asset_ids = [a.id for a in rows]
+ log_counts: dict[int, dict[str, int]] = {}
+ if asset_ids:
+  for aid, ev_type in s.query(AdoAssetLog.asset_id, AdoAssetLog.event_type).filter(AdoAssetLog.asset_id.in_(asset_ids)).all():
+   bucket = log_counts.setdefault(aid, {'repair': 0, 'issue': 0, 'total': 0})
+   bucket['total'] += 1
+   if ev_type == 'perbaikan':
+    bucket['repair'] += 1
+   elif ev_type == 'rusak':
+    bucket['issue'] += 1
  current_year = datetime.now(WIB).year
- items = [serialize_asset(a, store_map, current_year, do_map) for a in rows]
+ items = [serialize_asset(a, store_map, current_year, do_map, log_counts) for a in rows]
  if q.strip():
   needle = q.strip().casefold()
   items = [
@@ -700,6 +750,10 @@ def create_asset(v: AssetInput, u: AdoUser = Depends(ado_user), s: Session = Dep
   updated_at=now(),
  )
  s.add(a)
+ s.flush()
+ init_ev = st_val if st_val in ('perbaikan', 'rusak') else 'catatan'
+ init_desc = f'Asset ditambahkan ({st_val})' + (f' — {a.notes}' if a.notes else '')
+ add_asset_log(s, a.id, init_ev, init_desc, u.name, a.purchase_date)
  s.commit()
  s.refresh(a)
  return {'id': a.id}
@@ -713,6 +767,8 @@ def update_asset(id: int, v: AssetInput, u: AdoUser = Depends(ado_user), s: Sess
  st = s.get(AdoStore, a.store_id)
  if not st or not can_access_store(u, st):
   raise HTTPException(403, 'Tidak memiliki akses ke perangkat store ini')
+ prev_status = a.status
+ prev_notes = a.notes
  a.store_id = v.store_id
  a.group_type = 'CCTV_NETWORK' if v.group_type == 'CCTV_NETWORK' or 'CCTV' in v.category.upper() or 'NETWORK' in v.category.upper() else 'PERANGKAT'
  a.category = v.category.strip()
@@ -725,6 +781,12 @@ def update_asset(id: int, v: AssetInput, u: AdoUser = Depends(ado_user), s: Sess
  a.status = v.status if v.status in ('normal', 'perbaikan', 'rusak') else 'normal'
  a.notes = v.notes.strip()
  a.updated_at = now()
+ if a.status != prev_status:
+  ev = a.status if a.status in ('perbaikan', 'rusak', 'normal') else 'catatan'
+  desc = f'Status diubah: {prev_status} -> {a.status}' + (f' ({a.notes})' if a.notes and a.notes != prev_notes else '')
+  add_asset_log(s, a.id, ev, desc, u.name)
+ elif a.notes and a.notes != prev_notes:
+  add_asset_log(s, a.id, 'catatan', f'Catatan diperbarui: {a.notes}', u.name)
  s.commit()
  return {'ok': True}
 
@@ -734,9 +796,82 @@ def delete_asset(id: int, u: AdoUser = Depends(ado_admin_or_it), s: Session = De
  a = s.get(AdoAsset, id)
  if not a:
   raise HTTPException(404, 'Perangkat tidak ditemukan')
+ s.query(AdoAssetLog).filter(AdoAssetLog.asset_id == id).delete(synchronize_session=False)
  s.delete(a)
  s.commit()
  return {'ok': True}
+
+
+class AssetLogInput(BaseModel):
+ event_type: str = 'perbaikan'
+ event_date: str = Field(default='', max_length=20)
+ description: str = Field(min_length=1, max_length=1000)
+ update_status: bool = True
+
+
+@router.get('/assets/{id}/logs')
+def list_asset_logs(id: int, u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
+ a = s.get(AdoAsset, id)
+ if not a:
+  raise HTTPException(404, 'Perangkat tidak ditemukan')
+ st = s.get(AdoStore, a.store_id)
+ if not st or not can_access_store(u, st):
+  raise HTTPException(403, 'Tidak memiliki akses ke riwayat perangkat ini')
+ rows = s.query(AdoAssetLog).filter(AdoAssetLog.asset_id == id).order_by(AdoAssetLog.event_date.desc(), AdoAssetLog.id.desc()).all()
+ do_map = {}
+ if a.do_id:
+  order = s.get(AdoDeliveryOrder, a.do_id)
+  if order:
+   do_map[order.id] = order.do_number
+ repair_cnt = sum(1 for r in rows if r.event_type == 'perbaikan')
+ issue_cnt = sum(1 for r in rows if r.event_type == 'rusak')
+ mut_cnt = sum(1 for r in rows if r.event_type == 'mutasi')
+ log_counts = {a.id: {'repair': repair_cnt, 'issue': issue_cnt, 'total': len(rows)}}
+ return {
+  'asset': serialize_asset(a, {st.id: st}, datetime.now(WIB).year, do_map, log_counts),
+  'counts': {
+   'perbaikan': repair_cnt,
+   'rusak': issue_cnt,
+   'mutasi': mut_cnt,
+   'total': len(rows),
+  },
+  'logs': [{
+   'id': r.id,
+   'asset_id': r.asset_id,
+   'event_type': r.event_type,
+   'event_date': r.event_date,
+   'description': r.description,
+   'actor_name': r.actor_name,
+   'created_at': r.created_at,
+  } for r in rows],
+ }
+
+
+@router.post('/assets/{id}/logs')
+def create_asset_log(id: int, v: AssetLogInput, u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
+ a = s.get(AdoAsset, id)
+ if not a:
+  raise HTTPException(404, 'Perangkat tidak ditemukan')
+ st = s.get(AdoStore, a.store_id)
+ if not st or not can_access_store(u, st):
+  raise HTTPException(403, 'Tidak memiliki akses ke perangkat store ini')
+ ev = v.event_type if v.event_type in ('perbaikan', 'rusak', 'normal', 'catatan') else 'catatan'
+ ev_date = v.event_date.strip() or datetime.now(WIB).strftime('%Y-%m-%d')
+ log = AdoAssetLog(
+  asset_id=a.id,
+  event_type=ev,
+  event_date=ev_date[:20],
+  description=v.description.strip(),
+  actor_name=u.name,
+  created_at=now(),
+ )
+ s.add(log)
+ if v.update_status and ev in ('perbaikan', 'rusak', 'normal'):
+  a.status = ev
+ a.updated_at = now()
+ s.commit()
+ s.refresh(log)
+ return {'ok': True, 'id': log.id, 'status': a.status}
 
 
 def next_do_number(s: Session) -> str:
@@ -954,7 +1089,7 @@ def confirm_delivery_order(
  approver_name = (v.confirmed_by.strip() if v and v.confirmed_by else '') or u.name
  items = s.query(AdoDoItem).filter_by(do_id=order.id).order_by(AdoDoItem.id).all()
  for item in items:
-  s.add(AdoAsset(
+  new_asset = AdoAsset(
    store_id=order.store_id,
    group_type=item.group_type,
    category=item.category,
@@ -967,7 +1102,11 @@ def confirm_delivery_order(
    notes=item.notes,
    do_id=order.id,
    updated_at=now(),
-  ))
+  )
+  s.add(new_asset)
+  s.flush()
+  do_desc = f'Masuk dari DO {order.do_number}' + (f' — {item.notes}' if item.notes else '')
+  add_asset_log(s, new_asset.id, 'do_masuk', do_desc, approver_name, new_asset.purchase_date)
  order.status = 'confirmed'
  order.confirmed_at = now()
  order.confirmed_by = approver_name
@@ -1486,6 +1625,8 @@ def create_mutation(v: MutationInput, u: AdoUser = Depends(ado_user), s: Session
  asset.store_id = to_store.id
  asset.updated_at = now()
  s.add(mut)
+ mut_desc = f'Mutasi dari {from_store.store_code} · {from_store.name} ke {to_store.store_code} · {to_store.name}' + (f' — {v.notes.strip()}' if v.notes.strip() else '')
+ add_asset_log(s, asset.id, 'mutasi', mut_desc, u.name)
  s.commit()
  return {'ok': True, 'id': mut.id}
 

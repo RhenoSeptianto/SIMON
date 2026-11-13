@@ -11,6 +11,7 @@ let adoMutations = [];
 // Filter & draft states
 let adoAssetSearch = '';
 let adoAssetStoreFilter = '';
+let adoAssetCategoryFilter = '';
 let adoAssetStatusFilter = '';
 let adoDoTab = 'Existing Store';
 let adoConfirmTab = 'Existing Store';
@@ -85,8 +86,7 @@ function adoShell() {
    ['Dashboard', 'Overview', 'Dashboard'],
    ['Stores', 'Store', adoIsAdminOrIt() ? 'Data Store' : 'Store Saya'],
    ['Confirm', 'Confirm', 'Konfirmasi'],
-   ['Assets', 'Devices', 'Data Perangkat'],
-   ['Network', 'Network', 'Data CCTV & Network'],
+   ['Assets', 'Devices', 'Data Asset'],
    ['Mutation', 'Mutation', 'Mutasi Perangkat'],
    ['DO', 'DO', 'Permintaan Perangkat'],
    ['Reports', 'Reports', 'Report'],
@@ -151,11 +151,8 @@ async function renderAdo(quiet = false) {
    adoOrders = await adoApi('do');
    html = renderAdoConfirm();
   } else if (currentView === 'Assets') {
-   adoAssets = await adoApi('assets?group_type=PERANGKAT');
-   html = renderAdoAssets('PERANGKAT', 'Data Perangkat', 'Inventaris perangkat IT Back Office, POS, dan Kitchen di store.');
-  } else if (currentView === 'Network') {
-   adoAssets = await adoApi('assets?group_type=CCTV_NETWORK');
-   html = renderAdoAssets('CCTV_NETWORK', 'Data CCTV & Network', 'Inventaris Switch, Router, Modem, Access Point, DVR/NVR, dan Kamera CCTV.');
+   adoAssets = await adoApi('assets');
+   html = renderAdoAssets();
   } else if (currentView === 'Mutation') {
    const [allAssets, mutations] = await Promise.all([adoApi('assets'), adoApi('mutations')]);
    adoAssets = allAssets;
@@ -189,6 +186,13 @@ function adoYearTipCell(a) {
  return `<span class="ado-year-tip" tabindex="0" title="Tanggal &amp; Bulan: ${esc(tip)}" data-year-tip="${esc(tip)}">${esc(a.purchase_year)}</span>`;
 }
 
+function adoHistoryBtn(a) {
+ const cnt = Number(a.repair_count) || 0;
+ const cls = cnt > 0 ? 'ado-history-btn has-repair' : 'ado-history-btn';
+ const title = cnt > 0 ? `Riwayat perangkat (${cnt}x perbaikan)` : 'Lihat / Catat riwayat perangkat';
+ return `<button type="button" class="${cls}" data-asset-history="${a.id}" title="${title}">&#128339; <span>${cnt > 0 ? `${cnt}x` : '0'}</span></button>`;
+}
+
 function renderAdoDashboard(s, assets) {
  const kpis = [
   ['Jumlah Store Jabodetabek', s.stores_jabodetabek, 'ado-kpi-teal', 'Store wilayah Jabodetabek', 'Stores'],
@@ -197,13 +201,13 @@ function renderAdoDashboard(s, assets) {
   ['DO Menunggu Konfirmasi', s.pending_do, 'ado-kpi-amber', 'Permintaan perangkat baru', 'Confirm'],
   ['DO Terkonfirmasi', s.confirmed_do, 'ado-kpi-red', 'Sudah masuk ke aset store', 'Confirm'],
  ];
- const rows = assets.map(a => `<tr><td><b>${esc(a.store_code ? a.store_code + ' · ' : '')}${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td></tr>`);
+ const rows = assets.map(a => `<tr><td><b>${esc(a.store_code ? a.store_code + ' · ' : '')}${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td style="text-align:center">${adoHistoryBtn(a)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td></tr>`);
 
  return `<div class="page-heading"><div><span class="eyebrow">ASSET &amp; DELIVERY ORDER</span><h2>Dashboard</h2></div><span class="workspace-badge"><span class="server-dot"></span> Store Board ${esc(adoMe.name)}</span></div>
  <div class="kpis ado-kpis">${kpis.map(([title, num, cls, note, targetView]) => `<div class="card kpi-card ${cls}" data-ado-jump="${targetView}" role="button" tabindex="0"><div class="kpi-label"><span>${esc(title)}</span></div><strong>${num}</strong><small>${esc(note)}</small></div>`).join('')}</div>
  <div class="card"><div class="card-heading"><div><h3>Store Board ${esc(adoMe.name)}</h3><p>${adoIsAdminOrIt() ? 'Menampilkan seluruh perangkat dari semua store.' : 'Menampilkan perangkat dari store yang menjadi tanggung jawab kamu.'}</p></div><span class="subtle-badge">${assets.length} perangkat</span></div>
  <div class="toolbar device-search"><input id="adoDashSearch" placeholder="Cari nama store, kode store, kategori, perangkat, merk, atau SN..." aria-label="Cari di Store Board"></div>
- <div id="adoDashTable">${table(['Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun Perangkat', 'Usia Perangkat', 'Status'], rows, 'Belum ada data perangkat di Store Board', 'Tambahkan store lalu input perangkat atau konfirmasi Permintaan Perangkat (DO).', 'Devices')}</div></div>`;
+ <div id="adoDashTable">${table(['Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun Perangkat', 'Usia Perangkat', 'History', 'Status'], rows, 'Belum ada data perangkat di Store Board', 'Tambahkan store lalu input perangkat atau konfirmasi Permintaan Perangkat (DO).', 'Devices')}</div></div>`;
 }
 
 function adoStoreRowHtml(st) {
@@ -243,9 +247,14 @@ function renderAdoConfirm() {
  <div class="card table-card">${table(['No', 'Kode Permintaan', 'Nama Store', 'Technical Support', 'Tanggal Permintaan', 'Konfirmasi'], rows, 'Belum ada permintaan perangkat pada kategori ini', 'Permintaan perangkat (DO) yang dibuat oleh TS akan muncul di sini untuk dikonfirmasi Admin IT.')}</div>`;
 }
 
-function renderAdoAssets(groupType, title, subtitle) {
+function renderAdoAssets() {
+ const categories = Array.from(new Set([
+  ...(adoCatalog.categories || []).map(c => c.name),
+  ...adoAssets.map(a => a.category).filter(Boolean),
+ ]));
  const filtered = adoAssets.filter(a => {
   if (adoAssetStoreFilter && String(a.store_id) !== String(adoAssetStoreFilter)) return false;
+  if (adoAssetCategoryFilter && a.category !== adoAssetCategoryFilter) return false;
   if (adoAssetStatusFilter && a.status !== adoAssetStatusFilter) return false;
   if (adoAssetSearch) {
    const hay = `${a.store_code} ${a.store_name} ${a.category} ${a.device_name} ${a.brand} ${a.serial_number} ${a.notes}`.toLowerCase();
@@ -254,16 +263,17 @@ function renderAdoAssets(groupType, title, subtitle) {
   return true;
  });
 
- const rows = filtered.map(a => `<tr><td><span class="store-code">${esc(a.store_code)}</span></td><td><b>${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td>${a.do_number ? `<span class="pc-chip">${esc(a.do_number)}</span>` : '<span class="muted">Manual</span>'}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-edit-asset="${a.id}">Edit</button>${adoIsAdminOrIt() ? ` &middot; <button class="link-button" style="color:#cf535a" data-del-asset="${a.id}">Hapus</button>` : ''}</td></tr>`);
+ const rows = filtered.map(a => `<tr><td><span class="store-code">${esc(a.store_code)}</span></td><td><b>${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td>${a.do_number ? `<span class="pc-chip">${esc(a.do_number)}</span>` : '<span class="muted">Manual</span>'}</td><td style="text-align:center">${adoHistoryBtn(a)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-edit-asset="${a.id}">Edit</button>${adoIsAdminOrIt() ? ` &middot; <button class="link-button" style="color:#cf535a" data-del-asset="${a.id}">Hapus</button>` : ''}</td></tr>`);
 
- return `<div class="page-heading"><div><span class="eyebrow">INVENTARIS STORE</span><h2>${esc(title)}</h2></div><button id="addAdoAsset" data-group="${groupType}">+ Tambah ${groupType === 'CCTV_NETWORK' ? 'CCTV / Network' : 'Perangkat'}</button></div>
- <p class="page-description">${esc(subtitle)}</p>
+ return `<div class="page-heading"><div><span class="eyebrow">INVENTARIS STORE</span><h2>Data Asset</h2></div><button id="addAdoAsset">+ Tambah Asset</button></div>
+ <p class="page-description">Inventaris seluruh perangkat IT store (Back Office, POS, Kitchen, serta CCTV &amp; Network) dalam satu daftar terpadu.</p>
  <div class="toolbar device-search">
   <input id="adoAssetSearchInput" value="${esc(adoAssetSearch)}" placeholder="Cari store, kategori, perangkat, merk, atau serial number..." aria-label="Cari perangkat">
   <select id="adoAssetStoreSelect" aria-label="Filter Store"><option value="">Semua Store (${adoStores.length})</option>${adoStores.map(st => `<option value="${st.id}" ${String(adoAssetStoreFilter) === String(st.id) ? 'selected' : ''}>[${esc(st.store_code)}] ${esc(st.name)}</option>`).join('')}</select>
+  <select id="adoAssetCategorySelect" aria-label="Filter Area / Kategori"><option value="">Semua Area / Kategori</option>${categories.map(cat => `<option value="${esc(cat)}" ${adoAssetCategoryFilter === cat ? 'selected' : ''}>${esc(cat)}</option>`).join('')}</select>
   <select id="adoAssetStatusSelect" aria-label="Filter Kondisi"><option value="">Semua Kondisi</option><option value="normal" ${adoAssetStatusFilter === 'normal' ? 'selected' : ''}>Kondisi: Normal</option><option value="perbaikan" ${adoAssetStatusFilter === 'perbaikan' ? 'selected' : ''}>Kondisi: Perbaikan</option><option value="rusak" ${adoAssetStatusFilter === 'rusak' ? 'selected' : ''}>Kondisi: Rusak</option></select>
  </div>
- <div class="card table-card">${table(['Kode Store', 'Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Sumber DO', 'Status', ''], rows, 'Belum ada data perangkat', 'Klik tombol + Tambah di kanan atas atau lakukan Konfirmasi DO untuk menambahkan perangkat.')}</div>`;
+ <div class="card table-card">${table(['Kode Store', 'Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Sumber DO', 'History', 'Status', ''], rows, 'Belum ada data asset', 'Klik tombol + Tambah Asset di kanan atas atau lakukan Konfirmasi DO untuk menambahkan perangkat.')}</div>`;
 }
 
 function adoDevicesForCategory(catName) {
@@ -367,14 +377,7 @@ function renderAdoCatalog() {
   <form id="addCatalogCategoryForm" class="ado-area-create-form">
    <div>
     <label>Nama Area / Kategori Baru</label>
-    <input name="name" placeholder="Contoh: Area Office, Area Counter, Pos 4, Gudang IT..." required>
-   </div>
-   <div>
-    <label>Kelompok Menu</label>
-    <select name="group_type">
-     <option value="PERANGKAT">Menu Data Perangkat (Office / POS / Kitchen)</option>
-     <option value="CCTV_NETWORK">Menu Data CCTV &amp; Network</option>
-    </select>
+    <input name="name" placeholder="Contoh: Area Office, Area Counter, Pos 4, CCTV &amp; Network..." required>
    </div>
    <div>
     <label>&nbsp;</label>
@@ -431,8 +434,10 @@ function bindAdoEvents() {
   dashSearch.oninput = () => {
    const q = dashSearch.value.trim().toLowerCase();
    const filtered = adoAssets.filter(a => !q || `${a.store_code} ${a.store_name} ${a.category} ${a.device_name} ${a.brand} ${a.serial_number}`.toLowerCase().includes(q));
-   const rows = filtered.map(a => `<tr><td><b>${esc(a.store_code ? a.store_code + ' · ' : '')}${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td></tr>`);
-   document.querySelector('#adoDashTable').innerHTML = table(['Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun Perangkat', 'Usia Perangkat', 'Status'], rows, 'Tidak ada perangkat yang cocok', 'Coba kata kunci pencarian lain.');
+   const rows = filtered.map(a => `<tr><td><b>${esc(a.store_code ? a.store_code + ' · ' : '')}${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td style="text-align:center">${adoHistoryBtn(a)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td></tr>`);
+   document.querySelector('#adoDashTable').innerHTML = table(['Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun Perangkat', 'Usia Perangkat', 'History', 'Status'], rows, 'Tidak ada perangkat yang cocok', 'Coba kata kunci pencarian lain.');
+   document.querySelectorAll('#adoDashTable [data-asset-history]').forEach(b => b.onclick = () => showAdoAssetHistoryModal(Number(b.dataset.assetHistory)));
+   document.querySelectorAll('#adoDashTable [data-year-tip]').forEach(el => el.onclick = () => toast(`Tanggal perangkat: ${el.dataset.yearTip}`));
   };
  }
 
@@ -482,12 +487,19 @@ function bindAdoEvents() {
   adoAssetStoreFilter = e.target.value;
   renderAdo();
  });
+ document.querySelector('#adoAssetCategorySelect')?.addEventListener('change', e => {
+  adoAssetCategoryFilter = e.target.value;
+  renderAdo();
+ });
  document.querySelector('#adoAssetStatusSelect')?.addEventListener('change', e => {
   adoAssetStatusFilter = e.target.value;
   renderAdo();
  });
- document.querySelector('#addAdoAsset')?.addEventListener('click', e => {
-  showAdoAssetModal({ group_type: e.currentTarget.dataset.group || 'PERANGKAT' });
+ document.querySelector('#addAdoAsset')?.addEventListener('click', () => {
+  showAdoAssetModal({});
+ });
+ document.querySelectorAll('[data-asset-history]').forEach(b => b.onclick = () => {
+  showAdoAssetHistoryModal(Number(b.dataset.assetHistory));
  });
  document.querySelectorAll('[data-edit-asset]').forEach(b => b.onclick = () => {
   showAdoAssetModal(adoAssets.find(x => x.id == b.dataset.editAsset));
@@ -567,8 +579,10 @@ function bindAdoEvents() {
  document.querySelector('#addCatalogCategoryForm')?.addEventListener('submit', async e => {
   e.preventDefault();
   const fd = Object.fromEntries(new FormData(e.target));
+  const up = (fd.name || '').toUpperCase();
+  const grp = up.includes('CCTV') || up.includes('NETWORK') ? 'CCTV_NETWORK' : 'PERANGKAT';
   try {
-   await adoApi('catalog', { kind: 'category', name: fd.name, group_type: fd.group_type });
+   await adoApi('catalog', { kind: 'category', name: fd.name, group_type: grp });
    toast(`Area / Kategori "${fd.name}" berhasil ditambahkan.`);
    await renderAdo();
   } catch (err) { toast(err.message, 'error'); }
@@ -606,40 +620,133 @@ async function showAdoStoreAssetsModal(st) {
  if (!st) return;
  modal(`<h2>Asset Store: [${esc(st.store_code)}] ${esc(st.name)}</h2><div class="loading-state"><div></div><p>Memuat asset store...</p></div>`);
  const dlg = document.querySelector('dialog');
- if (dlg) dlg.style.maxWidth = '920px';
+ if (dlg) dlg.style.maxWidth = '960px';
  try {
   const storeAssets = await adoApi(`assets?store_id=${st.id}`);
-  let activeGroup = 'ALL';
-  const draw = () => {
-   const list = activeGroup === 'ALL' ? storeAssets : storeAssets.filter(a => a.group_type === activeGroup);
-   const rows = list.map(a => `<tr><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td>${a.do_number ? `<span class="pc-chip">${esc(a.do_number)}</span>` : '<span class="muted">Manual</span>'}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-modal-edit-asset="${a.id}">Edit</button></td></tr>`);
-   modal(`<h2>Asset Store: [${esc(st.store_code)}] ${esc(st.name)}</h2>
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px">
-     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span class="pc-chip">${esc(st.region)}</span>
-      <span class="role-badge">${esc(st.store_type)}</span>
-      <span class="muted" style="font-size:12.5px">TS: <b>${esc(st.ts_name)}</b> &middot; Total: <b>${storeAssets.length}</b> perangkat</span>
-     </div>
-     <button type="button" id="modalAddStoreAssetBtn">+ Tambah Asset ke Store Ini</button>
+  const rows = storeAssets.map(a => `<tr><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td>${a.do_number ? `<span class="pc-chip">${esc(a.do_number)}</span>` : '<span class="muted">Manual</span>'}</td><td style="text-align:center">${adoHistoryBtn(a)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-modal-edit-asset="${a.id}">Edit</button></td></tr>`);
+  modal(`<h2>Asset Store: [${esc(st.store_code)}] ${esc(st.name)}</h2>
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+     <span class="pc-chip">${esc(st.region)}</span>
+     <span class="role-badge">${esc(st.store_type)}</span>
+     <span class="muted" style="font-size:12.5px">TS: <b>${esc(st.ts_name)}</b> &middot; Total: <b>${storeAssets.length}</b> perangkat</span>
     </div>
-    <div class="ado-tab-bar" style="margin-bottom:12px">
-     <button type="button" class="ado-tab-btn ${activeGroup === 'ALL' ? 'active' : ''}" data-sa-grp="ALL">Semua (${storeAssets.length})</button>
-     <button type="button" class="ado-tab-btn ${activeGroup === 'PERANGKAT' ? 'active' : ''}" data-sa-grp="PERANGKAT">Data Perangkat (${storeAssets.filter(x => x.group_type === 'PERANGKAT').length})</button>
-     <button type="button" class="ado-tab-btn ${activeGroup === 'CCTV_NETWORK' ? 'active' : ''}" data-sa-grp="CCTV_NETWORK">CCTV &amp; Network (${storeAssets.filter(x => x.group_type === 'CCTV_NETWORK').length})</button>
-    </div>
-    <div class="card table-card">${table(['Kategori', 'Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Sumber DO', 'Status', ''], rows, 'Belum ada asset di store ini', 'Perangkat otomatis masuk ke sini setelah DO dikonfirmasi Admin IT, atau klik + Tambah Asset.')}</div>`);
-   if (dlg) dlg.style.maxWidth = '920px';
-   document.querySelectorAll('[data-sa-grp]').forEach(b => b.onclick = () => { activeGroup = b.dataset.saGrp; draw(); });
-   document.querySelectorAll('[data-year-tip]').forEach(el => { el.onclick = () => toast(`Tanggal perangkat: ${el.dataset.yearTip}`); });
-   document.querySelector('#modalAddStoreAssetBtn').onclick = () => showAdoAssetModal({ store_id: st.id, group_type: activeGroup === 'CCTV_NETWORK' ? 'CCTV_NETWORK' : 'PERANGKAT' });
-   document.querySelectorAll('[data-modal-edit-asset]').forEach(b => b.onclick = () => {
-    const asset = storeAssets.find(x => x.id == b.dataset.modalEditAsset);
-    if (asset) showAdoAssetModal(asset);
-   });
-  };
-  draw();
+    <button type="button" id="modalAddStoreAssetBtn">+ Tambah Asset ke Store Ini</button>
+   </div>
+   <div class="card table-card">${table(['Kategori', 'Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Sumber DO', 'History', 'Status', ''], rows, 'Belum ada asset di store ini', 'Perangkat otomatis masuk ke sini setelah DO dikonfirmasi Admin IT, atau klik + Tambah Asset.')}</div>`);
+  if (dlg) dlg.style.maxWidth = '960px';
+  document.querySelectorAll('[data-year-tip]').forEach(el => { el.onclick = () => toast(`Tanggal perangkat: ${el.dataset.yearTip}`); });
+  document.querySelectorAll('[data-asset-history]').forEach(b => b.onclick = () => showAdoAssetHistoryModal(Number(b.dataset.assetHistory)));
+  document.querySelector('#modalAddStoreAssetBtn').onclick = () => showAdoAssetModal({ store_id: st.id });
+  document.querySelectorAll('[data-modal-edit-asset]').forEach(b => b.onclick = () => {
+   const asset = storeAssets.find(x => x.id == b.dataset.modalEditAsset);
+   if (asset) showAdoAssetModal(asset);
+  });
  } catch (e) {
   modal(`<h2>Asset Store</h2><p class="error">${esc(e.message)}</p>`);
+ }
+}
+
+async function showAdoAssetHistoryModal(assetId) {
+ if (!assetId) return;
+ modal(`<h2>Riwayat Perangkat</h2><div class="loading-state"><div></div><p>Memuat riwayat perangkat...</p></div>`);
+ const dlg = document.querySelector('dialog');
+ if (dlg) dlg.style.maxWidth = '780px';
+ try {
+  const data = await adoApi(`assets/${assetId}/logs`);
+  const a = data.asset || {};
+  const counts = data.counts || {};
+  const logs = data.logs || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const badgeFor = (ev) => ({
+   perbaikan: ['Perbaikan', 'ado-log-repair'],
+   rusak: ['Kerusakan', 'ado-log-issue'],
+   normal: ['Normal', 'ado-log-ok'],
+   mutasi: ['Mutasi', 'ado-log-mut'],
+   do_masuk: ['DO Masuk', 'ado-log-do'],
+   catatan: ['Catatan', 'ado-log-note'],
+  }[ev] || [ev, 'ado-log-note']);
+
+  const timelineHtml = logs.length
+   ? `<div class="ado-timeline">${logs.map(l => {
+    const [lbl, cls] = badgeFor(l.event_type);
+    return `<div class="ado-timeline-item">
+     <div class="ado-timeline-dot ${cls}"></div>
+     <div class="ado-timeline-body">
+      <div class="ado-timeline-head">
+       <span class="ado-log-badge ${cls}">${esc(lbl)}</span>
+       <span class="ado-timeline-date">${esc(l.event_date || '-')}</span>
+       <span class="ado-timeline-actor">&middot; ${esc(l.actor_name || '-')}</span>
+      </div>
+      <div class="ado-timeline-desc">${esc(l.description)}</div>
+     </div>
+    </div>`;
+   }).join('')}</div>`
+   : '<p class="muted" style="margin:8px 0">Belum ada catatan riwayat pada perangkat ini.</p>';
+
+  modal(`<h2>&#128339; Riwayat Perangkat</h2>
+   <div class="ado-history-summary">
+    <div>
+     <div style="font-weight:700;font-size:15px">${esc(a.device_name || '-')} <span class="muted" style="font-weight:500">${a.brand ? `(${esc(a.brand)})` : ''}</span></div>
+     <div class="muted" style="font-size:12.5px;margin-top:2px">[${esc(a.store_code || '-')}] ${esc(a.store_name || '-')} &middot; ${esc(a.category || '-')} &middot; SN: <code>${esc(a.serial_number || '-')}</code></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+     <span class="ado-log-stat ado-log-repair">Perbaikan: <b>${counts.perbaikan || 0}x</b></span>
+     <span class="ado-log-stat ado-log-issue">Kerusakan: <b>${counts.rusak || 0}x</b></span>
+     <span class="ado-log-stat ado-log-mut">Mutasi: <b>${counts.mutasi || 0}x</b></span>
+    </div>
+   </div>
+
+   <form id="adoAssetLogForm" class="ado-log-form">
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">+ Catat Perbaikan / Kerusakan</div>
+    <div class="ado-log-form-row">
+     <div>
+      <label style="margin-top:0">Jenis Kejadian</label>
+      <select name="event_type">
+       <option value="perbaikan">Perbaikan / Service</option>
+       <option value="rusak">Kerusakan / Masalah</option>
+       <option value="normal">Selesai Diperbaiki (Normal)</option>
+       <option value="catatan">Catatan Umum</option>
+      </select>
+     </div>
+     <div>
+      <label style="margin-top:0">Tanggal</label>
+      <input name="event_date" type="date" value="${today}" required>
+     </div>
+    </div>
+    <label>Keterangan Kerusakan / Perbaikan</label>
+    <input name="description" placeholder="Contoh: Ganti thermal head printer, kabel LAN putus, power supply mati..." required maxlength="1000">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:500">
+     <input type="checkbox" name="update_status" style="width:auto;margin:0" checked>
+     Update status kondisi perangkat otomatis sesuai jenis kejadian
+    </label>
+    <p style="margin:10px 0 0"><button type="submit" id="adoSaveLogBtn">Simpan Riwayat</button></p>
+   </form>
+
+   <div style="margin-top:16px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px">Timeline Riwayat (${logs.length})</div>
+    ${timelineHtml}
+   </div>`);
+  if (dlg) dlg.style.maxWidth = '780px';
+  document.querySelector('#adoAssetLogForm').onsubmit = async e => {
+   e.preventDefault();
+   const btn = document.querySelector('#adoSaveLogBtn');
+   if (btn) btn.disabled = true;
+   const formEl = e.target;
+   const fd = Object.fromEntries(new FormData(formEl));
+   fd.update_status = Boolean(formEl.querySelector('[name="update_status"]')?.checked);
+   try {
+    await adoApi(`assets/${assetId}/logs`, fd);
+    toast('Riwayat perangkat berhasil dicatat.');
+    await showAdoAssetHistoryModal(assetId);
+    renderAdo(true);
+   } catch (err) {
+    toast(err.message, 'error');
+    if (btn) btn.disabled = false;
+   }
+  };
+ } catch (e) {
+  modal(`<h2>Riwayat Perangkat</h2><p class="error">${esc(e.message)}</p>`);
  }
 }
 
@@ -739,11 +846,6 @@ function showAdoAssetModal(a = {}) {
   <form id="adoAssetForm">
    <label>Store</label>
    <select name="store_id" required>${adoStores.map(st => `<option value="${st.id}" ${a.store_id === st.id ? 'selected' : ''}>[${esc(st.store_code)}] ${esc(st.name)}</option>`).join('')}</select>
-   <label>Grup Inventaris</label>
-   <select name="group_type">
-    <option value="PERANGKAT" ${a.group_type !== 'CCTV_NETWORK' ? 'selected' : ''}>Data Perangkat (Back Office / POS / Kitchen)</option>
-    <option value="CCTV_NETWORK" ${a.group_type === 'CCTV_NETWORK' ? 'selected' : ''}>Data CCTV &amp; Network</option>
-   </select>
    <label>Area / Kategori</label>
    <select name="category" id="modalAssetCategory">${cats.map(c => `<option value="${esc(c.name)}" ${activeCat === c.name ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
    <label>Nama Perangkat</label>
