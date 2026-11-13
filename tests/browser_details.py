@@ -201,8 +201,7 @@ try:
   update_success[0]=True
   with page.expect_navigation(timeout=15000,wait_until='domcontentloaded'):
    page.get_by_role('button',name='Update sekarang',exact=True).click()
-  expect(page.get_by_role('button',name='Keluar',exact=True)).to_be_visible(timeout=10000)
-  page.get_by_role('button',name='Keluar',exact=True).click()
+  expect(page.locator('#loginUpdateBtn')).to_be_visible(timeout=10000)
   page.locator('#loginUpdateBtn').click()
   expect(page.get_by_text('Update berhasil. Server sudah siap digunakan.',exact=True)).to_be_visible(timeout=10000)
   expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_disabled()
