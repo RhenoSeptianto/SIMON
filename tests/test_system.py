@@ -350,7 +350,7 @@ def test_ado_full_workflow_and_roles():
  assert 'Rheno TS' in print_res.text
  assets=ts_c.get('/api/ado/assets').json()
  assert len(assets)==2
- assert any(a['serial_number']=='W23G00725' and 'Tahun' in a['age_label'] for a in assets)
+ assert any(a['serial_number']=='W23G00725' and 'Tahun' in a['age_label'] and a['do_number']=='XI/DO/IT/099/2026' for a in assets)
 
  asset_id=assets[0]['id']
  assert ts_c.post('/api/ado/mutations',headers=H,json={'asset_id':asset_id,'to_store_id':st2,'notes':'Relokasi'}).status_code==200

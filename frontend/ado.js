@@ -206,11 +206,15 @@ function renderAdoDashboard(s, assets) {
  <div id="adoDashTable">${table(['Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun Perangkat', 'Usia Perangkat', 'Status'], rows, 'Belum ada data perangkat di Store Board', 'Tambahkan store lalu input perangkat atau konfirmasi Permintaan Perangkat (DO).', 'Devices')}</div></div>`;
 }
 
+function adoStoreRowHtml(st) {
+ return `<tr><td><span class="store-code">${esc(st.store_code)}</span></td><td><button class="link-button" data-store-assets="${st.id}" style="font-weight:700;text-align:left">${esc(st.name)}</button></td><td><span class="pc-chip">${esc(st.region)}</span></td><td><span class="role-badge">${esc(st.store_type)}</span></td><td>${esc(st.ts_name)}</td><td><button class="secondary compact" data-store-assets="${st.id}"><b>${st.asset_count}</b> unit &middot; Lihat Asset</button></td><td style="text-align:right">${adoIsAdminOrIt() ? `<button class="link-button" data-edit-store="${st.id}">Edit</button>` : '<span class="muted">&mdash;</span>'}</td></tr>`;
+}
+
 function renderAdoStores() {
- const rows = adoStores.map(st => `<tr><td><span class="store-code">${esc(st.store_code)}</span></td><td><b>${esc(st.name)}</b></td><td><span class="pc-chip">${esc(st.region)}</span></td><td><span class="role-badge">${esc(st.store_type)}</span></td><td>${esc(st.ts_name)}</td><td><b>${st.asset_count}</b> unit</td><td style="text-align:right">${adoIsAdminOrIt() ? `<button class="link-button" data-edit-store="${st.id}">Edit</button>` : '<span class="muted">&mdash;</span>'}</td></tr>`);
+ const rows = adoStores.map(adoStoreRowHtml);
  return `<div class="page-heading"><div><span class="eyebrow">MASTER STORE</span><h2>${adoIsAdminOrIt() ? 'Data Store' : 'Store Saya'}</h2></div>${adoIsAdminOrIt() ? `<button id="addAdoStore">+ Add Store</button>` : ''}</div>
  <div class="toolbar device-search"><input id="adoStoreSearch" placeholder="Cari kode store, nama store, wilayah, atau TS..." aria-label="Cari store"></div>
- <div class="card table-card" id="adoStoreTableWrap">${table(['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support', 'Total Perangkat', ''], rows, 'Belum ada store terdaftar', adoIsAdminOrIt() ? 'Klik tombol + Add Store untuk menambahkan kode store dan nama store.' : 'Belum ada store yang diassign ke akun TS kamu.')}</div>`;
+ <div class="card table-card" id="adoStoreTableWrap">${table(['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support', 'Asset Store', ''], rows, 'Belum ada store terdaftar', adoIsAdminOrIt() ? 'Klik tombol + Add Store untuk menambahkan kode store dan nama store.' : 'Belum ada store yang diassign ke akun TS kamu.')}</div>`;
 }
 
 function renderAdoConfirm() {
@@ -250,7 +254,7 @@ function renderAdoAssets(groupType, title, subtitle) {
   return true;
  });
 
- const rows = filtered.map(a => `<tr><td><span class="store-code">${esc(a.store_code)}</span></td><td><b>${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-edit-asset="${a.id}">Edit</button>${adoIsAdminOrIt() ? ` &middot; <button class="link-button" style="color:#cf535a" data-del-asset="${a.id}">Hapus</button>` : ''}</td></tr>`);
+ const rows = filtered.map(a => `<tr><td><span class="store-code">${esc(a.store_code)}</span></td><td><b>${esc(a.store_name)}</b></td><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td>${a.do_number ? `<span class="pc-chip">${esc(a.do_number)}</span>` : '<span class="muted">Manual</span>'}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-edit-asset="${a.id}">Edit</button>${adoIsAdminOrIt() ? ` &middot; <button class="link-button" style="color:#cf535a" data-del-asset="${a.id}">Hapus</button>` : ''}</td></tr>`);
 
  return `<div class="page-heading"><div><span class="eyebrow">INVENTARIS STORE</span><h2>${esc(title)}</h2></div><button id="addAdoAsset" data-group="${groupType}">+ Tambah ${groupType === 'CCTV_NETWORK' ? 'CCTV / Network' : 'Perangkat'}</button></div>
  <p class="page-description">${esc(subtitle)}</p>
@@ -259,7 +263,7 @@ function renderAdoAssets(groupType, title, subtitle) {
   <select id="adoAssetStoreSelect" aria-label="Filter Store"><option value="">Semua Store (${adoStores.length})</option>${adoStores.map(st => `<option value="${st.id}" ${String(adoAssetStoreFilter) === String(st.id) ? 'selected' : ''}>[${esc(st.store_code)}] ${esc(st.name)}</option>`).join('')}</select>
   <select id="adoAssetStatusSelect" aria-label="Filter Kondisi"><option value="">Semua Kondisi</option><option value="normal" ${adoAssetStatusFilter === 'normal' ? 'selected' : ''}>Kondisi: Normal</option><option value="perbaikan" ${adoAssetStatusFilter === 'perbaikan' ? 'selected' : ''}>Kondisi: Perbaikan</option><option value="rusak" ${adoAssetStatusFilter === 'rusak' ? 'selected' : ''}>Kondisi: Rusak</option></select>
  </div>
- <div class="card table-card">${table(['Kode Store', 'Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Status', ''], rows, 'Belum ada data perangkat', 'Klik tombol + Tambah di kanan atas atau lakukan Konfirmasi DO untuk menambahkan perangkat.')}</div>`;
+ <div class="card table-card">${table(['Kode Store', 'Nama Store', 'Kategori', 'Nama Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Sumber DO', 'Status', ''], rows, 'Belum ada data perangkat', 'Klik tombol + Tambah di kanan atas atau lakukan Konfirmasi DO untuk menambahkan perangkat.')}</div>`;
 }
 
 function adoDevicesForCategory(catName) {
@@ -437,14 +441,16 @@ function bindAdoEvents() {
   storeSearch.oninput = () => {
    const q = storeSearch.value.trim().toLowerCase();
    const filtered = adoStores.filter(st => !q || `${st.store_code} ${st.name} ${st.region} ${st.ts_name}`.toLowerCase().includes(q));
-   const rows = filtered.map(st => `<tr><td><span class="store-code">${esc(st.store_code)}</span></td><td><b>${esc(st.name)}</b></td><td><span class="pc-chip">${esc(st.region)}</span></td><td><span class="role-badge">${esc(st.store_type)}</span></td><td>${esc(st.ts_name)}</td><td><b>${st.asset_count}</b> unit</td><td style="text-align:right">${adoIsAdminOrIt() ? `<button class="link-button" data-edit-store="${st.id}">Edit</button>` : '<span class="muted">&mdash;</span>'}</td></tr>`);
-   document.querySelector('#adoStoreTableWrap').innerHTML = table(['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support', 'Total Perangkat', ''], rows, 'Tidak ada store yang cocok', 'Sesuaikan kata kunci pencarian.');
+   const rows = filtered.map(adoStoreRowHtml);
+   document.querySelector('#adoStoreTableWrap').innerHTML = table(['Kode Store', 'Nama Store', 'Wilayah', 'Kategori Store', 'Technical Support', 'Asset Store', ''], rows, 'Tidak ada store yang cocok', 'Sesuaikan kata kunci pencarian.');
    document.querySelectorAll('[data-edit-store]').forEach(b => b.onclick = () => showAdoStoreModal(adoStores.find(x => x.id == b.dataset.editStore)));
+   document.querySelectorAll('[data-store-assets]').forEach(b => b.onclick = () => showAdoStoreAssetsModal(adoStores.find(x => x.id == b.dataset.storeAssets)));
   };
  }
 
  document.querySelector('#addAdoStore')?.addEventListener('click', () => showAdoStoreModal());
  document.querySelectorAll('[data-edit-store]').forEach(b => b.onclick = () => showAdoStoreModal(adoStores.find(x => x.id == b.dataset.editStore)));
+ document.querySelectorAll('[data-store-assets]').forEach(b => b.onclick = () => showAdoStoreAssetsModal(adoStores.find(x => x.id == b.dataset.storeAssets)));
 
  document.querySelectorAll('[data-confirm-tab]').forEach(b => b.onclick = () => {
   adoConfirmTab = b.dataset.confirmTab;
@@ -593,6 +599,47 @@ function bindAdoEvents() {
  document.querySelectorAll('[data-edit-ado-user]').forEach(b => b.onclick = () => {
   showAdoUserModal(adoUsers.find(x => x.id == b.dataset.editAdoUser));
  });
+}
+
+async function showAdoStoreAssetsModal(st) {
+ if (!st) return;
+ modal(`<h2>Asset Store: [${esc(st.store_code)}] ${esc(st.name)}</h2><div class="loading-state"><div></div><p>Memuat asset store...</p></div>`);
+ const dlg = document.querySelector('dialog');
+ if (dlg) dlg.style.maxWidth = '920px';
+ try {
+  const storeAssets = await adoApi(`assets?store_id=${st.id}`);
+  let activeGroup = 'ALL';
+  const draw = () => {
+   const list = activeGroup === 'ALL' ? storeAssets : storeAssets.filter(a => a.group_type === activeGroup);
+   const rows = list.map(a => `<tr><td>${esc(a.category)}</td><td><b>${esc(a.device_name)}</b></td><td>${esc(a.brand || '-')}</td><td><code>${esc(a.serial_number || '-')}</code></td><td>${adoYearTipCell(a)}</td><td>${esc(a.age_label)}</td><td>${a.do_number ? `<span class="pc-chip">${esc(a.do_number)}</span>` : '<span class="muted">Manual</span>'}</td><td style="text-align:center">${adoStatusIcon(a.status)}</td><td style="text-align:right"><button class="link-button" data-modal-edit-asset="${a.id}">Edit</button></td></tr>`);
+   modal(`<h2>Asset Store: [${esc(st.store_code)}] ${esc(st.name)}</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px">
+     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="pc-chip">${esc(st.region)}</span>
+      <span class="role-badge">${esc(st.store_type)}</span>
+      <span class="muted" style="font-size:12.5px">TS: <b>${esc(st.ts_name)}</b> &middot; Total: <b>${storeAssets.length}</b> perangkat</span>
+     </div>
+     <button type="button" id="modalAddStoreAssetBtn">+ Tambah Asset ke Store Ini</button>
+    </div>
+    <div class="ado-tab-bar" style="margin-bottom:12px">
+     <button type="button" class="ado-tab-btn ${activeGroup === 'ALL' ? 'active' : ''}" data-sa-grp="ALL">Semua (${storeAssets.length})</button>
+     <button type="button" class="ado-tab-btn ${activeGroup === 'PERANGKAT' ? 'active' : ''}" data-sa-grp="PERANGKAT">Data Perangkat (${storeAssets.filter(x => x.group_type === 'PERANGKAT').length})</button>
+     <button type="button" class="ado-tab-btn ${activeGroup === 'CCTV_NETWORK' ? 'active' : ''}" data-sa-grp="CCTV_NETWORK">CCTV &amp; Network (${storeAssets.filter(x => x.group_type === 'CCTV_NETWORK').length})</button>
+    </div>
+    <div class="card table-card">${table(['Kategori', 'Perangkat', 'Merk', 'Serial Number', 'Tahun', 'Usia', 'Sumber DO', 'Status', ''], rows, 'Belum ada asset di store ini', 'Perangkat otomatis masuk ke sini setelah DO dikonfirmasi Admin IT, atau klik + Tambah Asset.')}</div>`);
+   if (dlg) dlg.style.maxWidth = '920px';
+   document.querySelectorAll('[data-sa-grp]').forEach(b => b.onclick = () => { activeGroup = b.dataset.saGrp; draw(); });
+   document.querySelectorAll('[data-year-tip]').forEach(el => { el.onclick = () => toast(`Tanggal perangkat: ${el.dataset.yearTip}`); });
+   document.querySelector('#modalAddStoreAssetBtn').onclick = () => showAdoAssetModal({ store_id: st.id, group_type: activeGroup === 'CCTV_NETWORK' ? 'CCTV_NETWORK' : 'PERANGKAT' });
+   document.querySelectorAll('[data-modal-edit-asset]').forEach(b => b.onclick = () => {
+    const asset = storeAssets.find(x => x.id == b.dataset.modalEditAsset);
+    if (asset) showAdoAssetModal(asset);
+   });
+  };
+  draw();
+ } catch (e) {
+  modal(`<h2>Asset Store</h2><p class="error">${esc(e.message)}</p>`);
+ }
 }
 
 function showAdoStoreModal(st = {}) {

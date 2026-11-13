@@ -463,10 +463,11 @@ def delete_store(id: int, u: AdoUser = Depends(ado_super_admin), s: Session = De
  return {'ok': True}
 
 
-def serialize_asset(a: AdoAsset, store_map: dict[int, AdoStore], current_year: int):
+def serialize_asset(a: AdoAsset, store_map: dict[int, AdoStore], current_year: int, do_map: dict[int, str] | None = None):
  st = store_map.get(a.store_id)
  age = max(0, current_year - (a.purchase_year or current_year))
  date_label = format_delivery_date_str(a.purchase_date, a.updated_at)
+ do_num = (do_map or {}).get(a.do_id, '') if a.do_id else ''
  return {
   'id': a.id,
   'store_id': a.store_id,
@@ -484,6 +485,8 @@ def serialize_asset(a: AdoAsset, store_map: dict[int, AdoStore], current_year: i
   'age_label': f'{age} Tahun',
   'status': a.status,
   'notes': a.notes,
+  'do_id': a.do_id,
+  'do_number': do_num,
   'updated_at': a.updated_at,
  }
 
@@ -509,8 +512,13 @@ def list_assets(
  if status:
   query = query.filter(AdoAsset.status == status)
  rows = query.order_by(AdoAsset.id.desc()).all()
+ do_ids = {a.do_id for a in rows if a.do_id}
+ do_map = {
+  o.id: o.do_number
+  for o in s.query(AdoDeliveryOrder).filter(AdoDeliveryOrder.id.in_(do_ids)).all()
+ } if do_ids else {}
  current_year = datetime.now(WIB).year
- items = [serialize_asset(a, store_map, current_year) for a in rows]
+ items = [serialize_asset(a, store_map, current_year, do_map) for a in rows]
  if q.strip():
   needle = q.strip().casefold()
   items = [
