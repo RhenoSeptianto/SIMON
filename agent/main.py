@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 import httpx
 from agent.collectors import inventory,metrics
 from agent.sentinel import SentinelWatcher,DEFAULT_XML
-from agent.config import load_config,validate_server,tls_context,DEFAULT_SERVER
+from agent.config import load_config,validate_server,tls_context,default_ca_file,DEFAULT_SERVER
 
 def quiet_transport_logs():
  for name in ('httpx','httpcore'):logging.getLogger(name).setLevel(logging.WARNING)
@@ -26,7 +26,7 @@ def run():
   store_code=str(args.store_code or config.get('store_code') or '').strip()
   if len(store_code)>40: raise ValueError('Kode store maksimal 40 karakter')
   sentinel=SentinelWatcher(args.sentinel_xml or config.get('sentinel_xml') or DEFAULT_XML)
-  ca_file=args.ca_file or config.get('ca_file')
+  ca_file=args.ca_file or config.get('ca_file') or (default_ca_file() if args.server.startswith('https://') else None)
   verify=tls_context(ca_file) if ca_file and not args.diagnose else None
  except (ValueError,OSError) as error: p.error(str(error))
  if args.check_connection:

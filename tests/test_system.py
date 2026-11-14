@@ -446,6 +446,20 @@ def test_ado_full_workflow_and_roles():
  assert len(track)==1 and track[0]['status']=='approved' and track[0]['sap_number']=='4900098765' and 'receiver_pin' not in track[0] and 'token' not in track[0]
 
 
+def test_agent_service_config_finds_parent_root(tmp_path):
+ from agent.config import service_config,default_ca_file
+ install_root=tmp_path/'SIMON'
+ exe=install_root/'SIMONAgent'/'SIMONAgent.exe'
+ exe.parent.mkdir(parents=True)
+ exe.write_text('',encoding='utf-8')
+ cfg=install_root/'config.json'
+ ca=install_root/'ca.crt'
+ cfg.write_text('{"store_code":"C33","ca_file":"ca.crt"}',encoding='utf-8')
+ ca.write_text('CERT',encoding='utf-8')
+ assert service_config(exe)==cfg
+ assert default_ca_file(exe)==str(ca)
+
+
 
 
 

@@ -6,9 +6,32 @@ from urllib.parse import urlsplit
 DEFAULT_SERVER='https://172.18.123.92:8443'
 DEFAULT_CONFIG=Path(os.getenv('PROGRAMDATA',str(Path.home())))/'SIMON'/'config.json'
 
+def _readable_file(path):
+    try:
+        if not path.is_file(): return False
+        with path.open('rb') as handle: handle.read(1)
+        return True
+    except OSError:
+        return False
+
 def service_config(executable=None):
-    local=Path(executable or sys.executable).resolve().parent/'config.json'
-    return local if local.exists() else DEFAULT_CONFIG
+    exe_dir=Path(executable or sys.executable).resolve().parent
+    candidates=[exe_dir/'config.json',exe_dir.parent/'config.json',DEFAULT_CONFIG]
+    local_app=os.getenv('LOCALAPPDATA')
+    if local_app: candidates.append(Path(local_app)/'SIMON'/'config.json')
+    for candidate in candidates:
+        if _readable_file(candidate): return candidate
+    return DEFAULT_CONFIG
+
+def default_ca_file(executable=None):
+    exe_dir=Path(executable or sys.executable).resolve().parent
+    candidates=[exe_dir/'ca.crt',exe_dir.parent/'ca.crt']
+    local_app=os.getenv('LOCALAPPDATA')
+    if local_app: candidates.append(Path(local_app)/'SIMON'/'ca.crt')
+    candidates.append(DEFAULT_CONFIG.parent/'ca.crt')
+    for candidate in candidates:
+        if _readable_file(candidate): return str(candidate)
+    return None
 
 def load_config(path=None):
     target=Path(path) if path else (service_config() if getattr(sys,'frozen',False) else DEFAULT_CONFIG)
