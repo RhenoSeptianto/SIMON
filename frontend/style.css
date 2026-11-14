@@ -292,3 +292,10 @@ body.dark .mutasi-pin-code { color: #70d8bd; }
 .mutasi-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 12.5px; margin-bottom: 8px; }
 .mutasi-stage-card { margin-top: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
 .mutasi-stage-card h4 { margin: 0 0 10px; font-size: 14px; }
+.login-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.login-server-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.login-server-status .server-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; display: inline-block; }
+.login-server-status.is-online { color: #10b981; }
+.login-server-status.is-online .server-dot { background: #10b981; box-shadow: 0 0 0 3px #10b98126; }
+.login-server-status.is-offline { color: #ef4444; }
+.login-server-status.is-offline .server-dot { background: #ef4444; }
