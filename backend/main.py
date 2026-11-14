@@ -658,4 +658,5 @@ from backend.ado import router as ado_router
 app.include_router(ado_router)
 app.mount('/static',StaticFiles(directory=ROOT/'frontend'),name='static')
 @app.get('/')
+@app.get('/mutasi',include_in_schema=False)
 def index(): return FileResponse(ROOT/'frontend'/'index.html')

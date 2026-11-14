@@ -383,6 +383,7 @@ def test_ado_full_workflow_and_roles():
  assert any(st['store_code']=='00305' and st['ts_user_id']==ts_id for st in ts_c.get('/api/ado/stores').json())
 
  # v1.3.0: health app_version + accounting role + 4-stage store-to-store mutation workflow
+ assert super_c.get('/mutasi').status_code==200
  health=super_c.get('/api/health').json()
  assert health['app_version']=='1.3.0'
  r_acc=super_c.post('/api/ado/users',headers=H,json={'name':'Budi Accounting','username':'budiacc','password':'1','role':'accounting','active':True})

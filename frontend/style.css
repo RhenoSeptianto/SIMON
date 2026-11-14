@@ -299,3 +299,8 @@ body.dark .mutasi-pin-code { color: #70d8bd; }
 .login-server-status.is-online .server-dot { background: #10b981; box-shadow: 0 0 0 3px #10b98126; }
 .login-server-status.is-offline { color: #ef4444; }
 .login-server-status.is-offline .server-dot { background: #ef4444; }
+.password-wrap { position: relative; display: flex; align-items: center; }
+.password-wrap input { width: 100%; padding-right: 42px; }
+.password-toggle-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 4px 8px; font-size: 16px; line-height: 1; border-radius: 6px; width: auto; min-width: 0; margin: 0; box-shadow: none; }
+.password-toggle-btn:hover, .password-toggle-btn.active { color: var(--ink); background: rgba(112, 216, 189, 0.14); }
+.mutasi-head-actions { display: flex; align-items: center; gap: 8px; }

@@ -381,7 +381,7 @@ function renderAdoMutations() {
   </tr>`;
  });
  const rows = adoMutations.map(m => `<tr><td>${esc(adoDateId(m.moved_at))}</td><td><b>${esc(m.device_name)}</b></td><td><code>${esc(m.serial_number || '-')}</code></td><td>${esc(m.from_store_name)}</td><td><b>${esc(m.to_store_name)}</b></td><td>${esc(m.moved_by)}</td><td>${esc(m.notes || '-')}</td></tr>`);
- return `<div class="page-heading"><div><span class="eyebrow">PERGERAKAN ASET</span><h2>${adoMe?.role === 'accounting' ? 'Approval Mutasi Asset' : 'Mutasi Perangkat'}</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap">${adoMe?.role !== 'accounting' ? `<button type="button" id="openNewPublicMutasiFromApp" class="secondary compact">+ Form Mutasi 4-Tahap (OPS/MA)</button><button id="addAdoMutation">+ Mutasi Cepat (IT)</button>` : ''}</div></div>
+ return `<div class="page-heading"><div><span class="eyebrow">PERGERAKAN ASET</span><h2>${adoMe?.role === 'accounting' ? 'Approval Mutasi Asset' : 'Mutasi Perangkat'}</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" id="copyPatenMutasiLinkBtn" class="secondary compact" title="Salin link permanen untuk store">&#128279; Copy Link Paten (/mutasi)</button>${adoMe?.role !== 'accounting' ? `<button type="button" id="openNewPublicMutasiFromApp" class="secondary compact">+ Form Mutasi 4-Tahap (OPS/MA)</button><button id="addAdoMutation">+ Mutasi Cepat (IT)</button>` : ''}</div></div>
  <p class="page-description">Alur Mutasi Asset Antar Store: <b>Store Pengirim &rarr; Area Manager &rarr; Store Penerima (PIN) &rarr; Accounting (No SAP)</b>.</p>
  <div class="card table-card" style="margin-bottom:20px">
   <div style="padding:16px 20px 6px"><h3 style="margin:0">Form Mutasi Antar Store (${adoMutationOrders.length})</h3></div>
@@ -633,6 +633,11 @@ function bindAdoEvents() {
  // Mutation
  document.querySelector('#addAdoMutation')?.addEventListener('click', showAdoMutationModal);
  document.querySelector('#openNewPublicMutasiFromApp')?.addEventListener('click', () => openPublicMutasiModal('', () => renderAdo()));
+ document.querySelector('#copyPatenMutasiLinkBtn')?.addEventListener('click', async () => {
+  const url = `${location.origin}/mutasi`;
+  try { await navigator.clipboard.writeText(url); toast('Link paten mutasi (/mutasi) disalin!'); }
+  catch (_) { toast(url); }
+ });
  document.querySelectorAll('[data-acc-approve-mut]').forEach(b => b.onclick = () => {
   const order = adoMutationOrders.find(x => x.id == b.dataset.accApproveMut);
   if (order) showAccountingApproveMutationModal(order);
@@ -1605,10 +1610,15 @@ async function openPublicMutasiModal(token = '', onDone = null) {
  document.querySelectorAll('dialog.ado-dlg').forEach(d => d.remove());
  const dlg = document.createElement('dialog');
  dlg.className = 'ado-dlg modal-dialog mutasi-public-dlg';
- dlg.innerHTML = `<div class="modal-head"><h3>Mutasi Asset Antar Store</h3><button class="btn btn-sm" id="pubMutClose">✕</button></div>
+ const patenUrl = `${location.origin}/mutasi`;
+ dlg.innerHTML = `<div class="modal-head"><h3>Mutasi Asset Antar Store</h3><div class="mutasi-head-actions"><button type="button" class="secondary compact" id="pubMutCopyPaten" title="Salin link permanen untuk store">&#128279; Copy Link Paten</button><button type="button" class="secondary compact" id="pubMutClose">✕</button></div></div>
   <div class="modal-body" id="pubMutBody"><div class="muted" style="padding:20px;text-align:center">Memuat data mutasi...</div></div>`;
  document.body.appendChild(dlg);
  dlg.showModal();
+ dlg.querySelector('#pubMutCopyPaten')?.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(patenUrl); toast('Link paten mutasi (/mutasi) disalin!'); }
+  catch (_) { toast(patenUrl); }
+ });
  dlg.querySelector('#pubMutClose')?.addEventListener('click', () => dlg.close());
  dlg.addEventListener('close', () => dlg.remove());
 
