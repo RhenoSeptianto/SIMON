@@ -267,3 +267,28 @@ body.dark .mutasi-st-pending_area { color: #fbbf24; }
 body.dark .mutasi-st-pending_receiver { color: #60a5fa; }
 body.dark .mutasi-st-pending_accounting { color: #a78bfa; }
 body.dark .mutasi-st-approved { color: #34d399; }
+.ado-dlg.modal-dialog { width: min(760px, 95vw); max-height: 92vh; padding: 0; border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: var(--ink); overflow: hidden; }
+.ado-dlg.modal-dialog::backdrop { background: rgba(6, 16, 22, 0.65); backdrop-filter: blur(3px); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h3 { margin: 0; font-size: 16px; }
+.modal-body { padding: 16px 18px; overflow-y: auto; max-height: calc(92vh - 60px); }
+.modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--line); }
+.form-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; margin-bottom: 10px; }
+.form-grid-2 label, .modal-body > form > label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; }
+.mutasi-items-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 8px; }
+.mutasi-items-wrap { display: flex; flex-direction: column; gap: 8px; }
+.mutasi-item-row { display: grid; grid-template-columns: 1.2fr 1fr 1.3fr 0.9fr auto auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.mutasi-item-row input { margin: 0; }
+.mi-qty-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.mi-qty-wrap .mi-qty { width: 64px; text-align: center; }
+@media (max-width: 720px) { .mutasi-item-row { grid-template-columns: 1fr 1fr; } .mutasi-item-row .mi-del { justify-self: end; } }
+.mutasi-doc-pill { display: inline-block; padding: 5px 11px; border-radius: 999px; background: #168c871f; color: #0f766e; font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+body.dark .mutasi-doc-pill { color: #5eead4; }
+.mutasi-pin-box { padding: 12px 14px; border-radius: 12px; border: 1px dashed #168c87; background: #168c8712; text-align: center; margin: 8px 0 12px; }
+.mutasi-pin-label { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.mutasi-pin-code { font-size: 26px; font-weight: 800; letter-spacing: 6px; color: #0f766e; margin: 4px 0; }
+body.dark .mutasi-pin-code { color: #70d8bd; }
+.mutasi-qr-wrap { display: flex; justify-content: center; margin: 10px 0; }
+.mutasi-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 12.5px; margin-bottom: 8px; }
+.mutasi-stage-card { margin-top: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
+.mutasi-stage-card h4 { margin: 0 0 10px; font-size: 14px; }

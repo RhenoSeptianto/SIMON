@@ -1448,56 +1448,52 @@ function showAdoUserModal(u = {}) {
  };
 }
 
-function adoSigPadHtml(prefix, title = 'Tanda Tangan Digital') {
- return `<div class="mutasi-sig-box">
-  <div class="mutasi-sig-head"><span>${esc(title)}</span><button type="button" class="btn btn-sm" id="${prefix}SigClearBtn">Hapus TTD</button></div>
-  <canvas id="${prefix}SigCanvas" width="380" height="130" class="mutasi-sig-canvas"></canvas>
+function adoSigPadHtml(prefix, title = 'Attachment Tanda Tangan (TTD)') {
+ return `<div class="ado-sig-panel" style="margin-top:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+   <b>${esc(title)}</b>
+   <button type="button" class="secondary compact" id="${prefix}SigClearBtn">Hapus TTD</button>
+  </div>
+  <div class="ado-sig-body">
+   <label class="ado-sig-upload-box" for="${prefix}SigFileInput">
+    <b>&#128206; Pilih / Attach File Gambar TTD</b>
+    <small>Format PNG, JPG, atau WEBP (disarankan PNG transparan / latar putih)</small>
+    <input type="file" id="${prefix}SigFileInput" accept="image/png,image/jpeg,image/webp" hidden>
+   </label>
+   <div>
+    <small class="muted" style="display:block;margin-bottom:4px">Preview TTD:</small>
+    <div id="${prefix}SigPreview" class="ado-sig-preview"></div>
+   </div>
+  </div>
  </div>`;
 }
 
 function adoBindSigPad(prefix, initialSig = '') {
- const canvas = document.getElementById(prefix + 'SigCanvas');
+ let currentSig = (initialSig && initialSig.startsWith('data:image/')) ? initialSig : '';
+ const fileInput = document.getElementById(prefix + 'SigFileInput');
+ const preview = document.getElementById(prefix + 'SigPreview');
  const clearBtn = document.getElementById(prefix + 'SigClearBtn');
- if (!canvas) return () => initialSig || '';
- const ctx = canvas.getContext('2d');
- ctx.fillStyle = '#ffffff';
- ctx.fillRect(0, 0, canvas.width, canvas.height);
- let hasInk = false;
- if (initialSig && initialSig.startsWith('data:image/')) {
-  const img = new Image();
-  img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); hasInk = true; };
-  img.src = initialSig;
- }
- let drawing = false;
- const pos = (e) => {
-  const r = canvas.getBoundingClientRect();
-  const pt = e.touches ? e.touches[0] : e;
-  return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
+ const syncPreview = () => {
+  if (!preview) return;
+  preview.innerHTML = currentSig
+   ? `<img src="${currentSig}" alt="Preview TTD" style="max-height:80px;max-width:100%;object-fit:contain">`
+   : '<span class="muted" style="font-size:12px">Belum ada TTD terpasang</span>';
  };
- const start = (e) => { drawing = true; hasInk = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
- const move = (e) => {
-  if (!drawing) return;
-  const p = pos(e);
-  ctx.lineWidth = 2.2;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineTo(p.x, p.y);
-  ctx.stroke();
-  e.preventDefault();
- };
- const end = () => { drawing = false; };
- canvas.addEventListener('mousedown', start);
- canvas.addEventListener('mousemove', move);
- window.addEventListener('mouseup', end);
- canvas.addEventListener('touchstart', start, { passive: false });
- canvas.addEventListener('touchmove', move, { passive: false });
- canvas.addEventListener('touchend', end);
- clearBtn?.addEventListener('click', () => {
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  hasInk = false;
+ syncPreview();
+ fileInput?.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  adoReadSignatureFile(file, (dataUrl) => {
+   currentSig = dataUrl;
+   syncPreview();
+  });
  });
- return () => (hasInk ? canvas.toDataURL('image/png') : '');
+ clearBtn?.addEventListener('click', () => {
+  currentSig = '';
+  if (fileInput) fileInput.value = '';
+  syncPreview();
+ });
+ return () => currentSig || '';
 }
 
 function showMutationOrderShareModal(order) {
@@ -1769,13 +1765,12 @@ async function openPublicMutasiModal(token = '', onDone = null) {
    const row = document.createElement('div');
    row.className = 'mutasi-item-row';
    row.innerHTML = `<input class="mi-sn" list="pubAssetSnList" placeholder="Serial Number *" required>
-    <button type="button" class="btn btn-sm mi-scan" title="Scan Barcode / QR">Scan</button>
     <input class="mi-code" placeholder="Kode Asset (opsional)">
     <input class="mi-name" placeholder="Nama Perangkat *" required>
     <input class="mi-brand" placeholder="Merk">
-    <input class="mi-qty" type="number" min="1" value="1" style="width:68px">
+    <label class="mi-qty-wrap"><span>Qty</span><input class="mi-qty" type="number" min="1" value="1"></label>
     <input type="hidden" class="mi-aid" value="">
-    <button type="button" class="btn btn-sm mi-del" title="Hapus">✕</button>`;
+    <button type="button" class="secondary compact mi-del" title="Hapus">✕</button>`;
    const snIn = row.querySelector('.mi-sn');
    const fillFromAsset = (snVal) => {
     const found = storeAssets.find(a => (a.serial_number || '').toLowerCase() === (snVal || '').trim().toLowerCase());
@@ -1788,11 +1783,6 @@ async function openPublicMutasiModal(token = '', onDone = null) {
    };
    snIn.addEventListener('change', () => fillFromAsset(snIn.value));
    snIn.addEventListener('input', () => fillFromAsset(snIn.value));
-   row.querySelector('.mi-scan').addEventListener('click', () => {
-    if (typeof openCameraScanner === 'function') {
-     openCameraScanner((code) => { snIn.value = code; fillFromAsset(code); });
-    }
-   });
    row.querySelector('.mi-del').addEventListener('click', () => {
     if (itemsWrap.children.length > 1) row.remove();
    });
