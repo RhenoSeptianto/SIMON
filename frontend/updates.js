@@ -53,7 +53,7 @@ async function openLoginUpdateModal(){
  d.innerHTML=`<div class="loading-state"><div></div><p>Memeriksa akses Super Admin...</p></div>`;
  if(!d.open)d.showModal();
  const renderAppUpdate=(data)=>{
-  d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><h2 style="margin:0">Update Aplikasi SIMONDO</h2><button type="button" id="closeLoginUpdateModal" class="secondary compact">Tutup</button></div>${updateCard(data)}`;
+  d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px"><h2 style="margin:0">Update Aplikasi SIMONADO</h2><button type="button" id="closeLoginUpdateModal" class="secondary compact">Tutup</button></div>${updateCard(data)}`;
   document.querySelector('#closeLoginUpdateModal').onclick=()=>d.close();
   bindUpdates();
  };
@@ -61,7 +61,7 @@ async function openLoginUpdateModal(){
   const r=await fetch('/api/system/update/status',{cache:'no-store'});
   if(r.ok){renderAppUpdate(await r.json());return;}
  }catch{}
- d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"><h2 style="margin:0">Update Aplikasi SIMONDO</h2><button type="button" id="closeLoginUpdateModal" class="secondary compact">Tutup</button></div>
+ d.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"><h2 style="margin:0">Update Aplikasi SIMONADO</h2><button type="button" id="closeLoginUpdateModal" class="secondary compact">Tutup</button></div>
   <p class="muted" style="margin-top:0">Masukkan akun <b>Super Admin</b> untuk memeriksa dan menjalankan pembaruan aplikasi SIMON &amp; ADO.</p>
   <form id="loginUpdateAuthForm">
    <label>Username Super Admin</label>

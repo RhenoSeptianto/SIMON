@@ -382,6 +382,67 @@ def test_ado_full_workflow_and_roles():
  assert imp_res.status_code==200 and imp_res.json()['created']==1
  assert any(st['store_code']=='00305' and st['ts_user_id']==ts_id for st in ts_c.get('/api/ado/stores').json())
 
+ # v1.3.0: health app_version + accounting role + 4-stage store-to-store mutation workflow
+ health=super_c.get('/api/health').json()
+ assert health['app_version']=='1.3.0'
+ r_acc=super_c.post('/api/ado/users',headers=H,json={'name':'Budi Accounting','username':'budiacc','password':'1','role':'accounting','active':True})
+ assert r_acc.status_code==200
+ acc_c=TestClient(app)
+ assert acc_c.post('/api/ado/login',json={'username':'budiacc','password':'1'}).status_code==200
+ assert acc_c.get('/api/ado/me').json()['role']=='accounting'
+
+ pub_c=TestClient(app)
+ pub_stores=pub_c.get('/api/ado/public/mutasi/stores')
+ assert pub_stores.status_code==200 and len(pub_stores.json())>=2
+ pub_assets=pub_c.get(f'/api/ado/public/mutasi/assets?store_id={st2}')
+ assert pub_assets.status_code==200
+ mut_create=pub_c.post('/api/ado/public/mutasi',headers=H,json={
+  'from_store_id':st2,'to_store_id':st1,'mutation_date':'2026-11-14','reason':'Relokasi store',
+  'sender_name':'PIC Pengirim','sender_signature':tiny_png,
+  'items':[{'asset_id':asset_id,'asset_code':'AST-001','device_name':'SCANNER ZEBRA','brand':'ZEBRA','serial_number':'SN-ZEB-001','qty':1}],
+ })
+ assert mut_create.status_code==200
+ mut_data=mut_create.json()
+ mut_id=mut_data['id']
+ mut_tok=mut_data['token']
+ pin=mut_data['receiver_pin']
+ assert len(pin)==6 and mut_data['status']=='pending_area' and '/MA/' in mut_data['doc_number']
+
+ assert pub_c.get(f'/api/ado/public/mutasi/{mut_tok}').json().get('receiver_pin') is None
+ area_res=pub_c.post(f'/api/ado/public/mutasi/{mut_tok}/area',headers=H,json={
+  'area_manager_name':'Pak Area','area_label':'Area Manager 02','area_signature':tiny_png,
+ })
+ assert area_res.status_code==200 and area_res.json()['status']=='pending_receiver'
+
+ bad_pin=pub_c.post(f'/api/ado/public/mutasi/{mut_tok}/receive',headers=H,json={
+  'pin':'000000','receiver_name':'PIC Penerima','receiver_signature':tiny_png,
+ })
+ assert bad_pin.status_code==403
+ ok_recv=pub_c.post(f'/api/ado/public/mutasi/{mut_tok}/receive',headers=H,json={
+  'pin':pin,'receiver_name':'PIC Penerima','receiver_signature':tiny_png,
+ })
+ assert ok_recv.status_code==200 and ok_recv.json()['status']=='pending_accounting'
+
+ assert len(acc_c.get('/api/ado/mutation-orders').json())>=1
+ app_res=acc_c.post(f'/api/ado/mutation-orders/{mut_id}/approve',headers=H,json={
+  'sap_number':'4900098765','accounting_name':'Budi Accounting','accounting_signature':tiny_png,'save_user_signature':True,
+ })
+ assert app_res.status_code==200 and app_res.json()['ok'] and app_res.json()['moved_assets']==1
+ approved_order=[o for o in acc_c.get('/api/ado/mutation-orders').json() if o['id']==mut_id][0]
+ assert approved_order['status']=='approved' and approved_order['sap_number']=='4900098765'
+
+ mut_print=acc_c.get(f'/api/ado/mutation-orders/{mut_id}/print')
+ assert mut_print.status_code==200
+ assert 'MUTASI ASSET/KIRIM BARANG' in mut_print.text
+ assert '4900098765' in mut_print.text
+ assert 'Area Manager 02' in mut_print.text
+
+ moved_assets=ts_c.get('/api/ado/assets').json()
+ assert any(a['id']==asset_id and a['store_id']==st1 and a['asset_code']=='AST-001' for a in moved_assets)
+ logs_after=ts_c.get(f'/api/ado/assets/{asset_id}/logs').json()['logs']
+ assert any(l['event_type']=='mutasi' and mut_data['doc_number'] in (l['description'] or '') for l in logs_after)
+
+
 
 
 

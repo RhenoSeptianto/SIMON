@@ -71,8 +71,11 @@ def restore_database(config,backup):
  command([config['pg_restore'],'--clean','--create','--if-exists','--no-owner','--no-privileges','--dbname','postgres',str(backup)],env=postgres_environment(config),timeout=600)
 
 def extract_commit(config,sha,target):
- target=Path(target);target.mkdir(parents=True,exist_ok=False)
+ target=Path(target)
+ if target.exists():shutil.rmtree(target,ignore_errors=True)
+ target.mkdir(parents=True,exist_ok=True)
  archive=target.parent/(target.name+'.tar')
+ archive.unlink(missing_ok=True)
  with archive.open('wb') as output:
   process=subprocess.run([config['git'],'-c','safe.directory='+config['repo'],'archive','--format=tar',sha],cwd=config['repo'],stdout=output,stderr=subprocess.PIPE,timeout=90,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
  if process.returncode:raise RuntimeError('Gagal mengekstrak commit: '+process.stderr.decode(errors='replace')[-1000:])

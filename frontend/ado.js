@@ -7,6 +7,7 @@ let adoOrders = [];
 let adoCatalog = { categories: [], devices: [] };
 let adoUsers = [];
 let adoMutations = [];
+let adoMutationOrders = [];
 
 // Filter & draft states
 let adoAssetSearch = '';
@@ -20,7 +21,8 @@ let adoDoDraftItems = [];
 
 const adoIsSuperAdmin = () => adoMe?.role === 'super_admin';
 const adoIsAdminOrIt = () => ['super_admin', 'admin_it'].includes(adoMe?.role);
-const adoRoleLabel = (role) => ({ super_admin: 'Super Admin', admin_it: 'Admin IT', ts: 'Technical Support' }[role] || role);
+const adoIsAccountingOrAdmin = () => ['super_admin', 'accounting'].includes(adoMe?.role);
+const adoRoleLabel = (role) => ({ super_admin: 'Super Admin', admin_it: 'Admin IT', ts: 'Technical Support', accounting: 'Accounting' }[role] || role);
 
 function adoDateId(ts) {
  if (!ts) return '-';
@@ -77,23 +79,30 @@ function adoStatusIcon(status) {
 
 function adoShell() {
  const pendingCount = Number(adoMe?.pending_do_count) || 0;
+ const pendingMutCount = Number(adoMe?.pending_mutation_count) || 0;
  const navItems = adoMe?.role === 'admin_it'
   ? [
    ['Confirm', 'Confirm', 'Konfirmasi'],
    ['Reports', 'Reports', 'Report'],
   ]
-  : [
-   ['Dashboard', 'Overview', 'Dashboard'],
-   ['Stores', 'Store', adoIsAdminOrIt() ? 'Data Store' : 'Store Saya'],
-   ['Confirm', 'Confirm', 'Konfirmasi'],
-   ['Assets', 'Devices', 'Data Asset'],
-   ['Mutation', 'Mutation', 'Mutasi Perangkat'],
-   ['DO', 'DO', 'Permintaan Perangkat'],
-   ['Reports', 'Reports', 'Report'],
-   ...(adoIsSuperAdmin() ? [['Catalog', 'Catalog', 'Master Perangkat'], ['Users', 'Users', 'Data User']] : []),
-  ];
+  : adoMe?.role === 'accounting'
+   ? [
+    ['Mutation', 'Mutation', 'Mutasi Asset'],
+    ['Assets', 'Devices', 'Data Asset'],
+    ['Reports', 'Reports', 'Report'],
+   ]
+   : [
+    ['Dashboard', 'Overview', 'Dashboard'],
+    ['Stores', 'Store', adoIsAdminOrIt() ? 'Data Store' : 'Store Saya'],
+    ['Confirm', 'Confirm', 'Konfirmasi'],
+    ['Assets', 'Devices', 'Data Asset'],
+    ['Mutation', 'Mutation', 'Mutasi Perangkat'],
+    ['DO', 'DO', 'Permintaan Perangkat'],
+    ['Reports', 'Reports', 'Report'],
+    ...(adoIsSuperAdmin() ? [['Catalog', 'Catalog', 'Master Perangkat'], ['Users', 'Users', 'Data User']] : []),
+   ];
 
- root.innerHTML = `<aside class="sidebar ado-sidebar"><div class="brand"><div class="brand-mark">${adoIcon('Store')}</div><div class="brand-text"><h1>ADO<span>.</span></h1><small>ASSET &amp; DELIVERY ORDER</small></div><button id="toggleSidebar" class="sidebar-toggle" type="button" aria-label="Minimize menu" title="Minimize / Perlebar menu">${uiIcon('collapse')}</button></div><div class="nav-caption">MODUL ASSET &amp; DO</div><nav aria-label="Navigasi ADO">${navItems.map(([key, ic, label]) => `<button data-ado-view="${key}" title="${label}" class="${adoView === key ? 'active' : ''}" ${adoView === key ? 'aria-current="page"' : ''}>${adoIcon(ic)}<span>${label}</span><span class="nav-indicator-group" aria-hidden="true">${key === 'Confirm' && pendingCount > 0 ? `<b class="ado-new-badge">New${pendingCount > 1 ? ' ' + pendingCount : ''}</b>` : ''}${adoView === key ? '<i class="nav-dot"></i>' : ''}</span></button>`).join('')}</nav><div class="sidebar-bottom"><span class="server-dot server-dot-ok"></span><div class="sidebar-bottom-text"><b>ADO Workspace</b><small>SIMONDO v${esc(adoMe.version || '1.2.0')}</small></div></div></aside><main><header class="topbar"><div class="breadcrumb">ADO <span>/</span> <b>${esc(adoRoleLabel(adoMe.role))}</b></div><div class="topbar-actions"><div class="account"><span class="avatar">${esc((adoMe.name || 'U').slice(0, 1).toUpperCase())}</span><div><b>${esc(adoMe.name)}</b><small>${esc(adoRoleLabel(adoMe.role))}</small></div></div>${adoIsAdminOrIt() ? `<button id="adoMySigBtn" class="secondary compact" title="Atur Tanda Tangan (TTD) Saya">&#9998; TTD Saya</button>` : ''}<button id="adoTheme" class="icon-button" aria-label="Ganti tema" title="Ganti tema">${uiIcon('theme')}</button><button id="adoLogout" class="secondary compact">${uiIcon('logout')}<span>Keluar</span></button></div></header><div id="content" aria-live="polite"><div class="loading-state"><div></div><p>Memuat data ADO...</p></div></div><footer class="main-footer"><span>ADO <span>&middot;</span> ICT - Technical Support Store</span><span>1 Database Terpadu (Tabel ado_*)</span></footer></main><dialog id="dialog"></dialog>`;
+ root.innerHTML = `<aside class="sidebar ado-sidebar"><div class="brand"><div class="brand-mark">${adoIcon('Store')}</div><div class="brand-text"><h1>ADO<span>.</span></h1><small>ASSET &amp; DELIVERY ORDER</small></div><button id="toggleSidebar" class="sidebar-toggle" type="button" aria-label="Minimize menu" title="Minimize / Perlebar menu">${uiIcon('collapse')}</button></div><div class="nav-caption">MODUL ASSET &amp; DO</div><nav aria-label="Navigasi ADO">${navItems.map(([key, ic, label]) => `<button data-ado-view="${key}" title="${label}" class="${adoView === key ? 'active' : ''}" ${adoView === key ? 'aria-current="page"' : ''}>${adoIcon(ic)}<span>${label}</span><span class="nav-indicator-group" aria-hidden="true">${key === 'Confirm' && pendingCount > 0 ? `<b class="ado-new-badge">New${pendingCount > 1 ? ' ' + pendingCount : ''}</b>` : ''}${key === 'Mutation' && pendingMutCount > 0 ? `<b class="ado-new-badge">New${pendingMutCount > 1 ? ' ' + pendingMutCount : ''}</b>` : ''}${adoView === key ? '<i class="nav-dot"></i>' : ''}</span></button>`).join('')}</nav><div class="sidebar-bottom"><span class="server-dot server-dot-ok"></span><div class="sidebar-bottom-text"><b>ADO Workspace</b><small>SIMONADO v${esc(adoMe.version || '1.3.0')}</small></div></div></aside><main><header class="topbar"><div class="breadcrumb">ADO <span>/</span> <b>${esc(adoRoleLabel(adoMe.role))}</b></div><div class="topbar-actions"><div class="account"><span class="avatar">${esc((adoMe.name || 'U').slice(0, 1).toUpperCase())}</span><div><b>${esc(adoMe.name)}</b><small>${esc(adoRoleLabel(adoMe.role))}</small></div></div>${(adoIsAdminOrIt() || adoMe?.role === 'accounting') ? `<button id="adoMySigBtn" class="secondary compact" title="Atur Tanda Tangan (TTD) Saya">&#9998; TTD Saya</button>` : ''}<button id="adoTheme" class="icon-button" aria-label="Ganti tema" title="Ganti tema">${uiIcon('theme')}</button><button id="adoLogout" class="secondary compact">${uiIcon('logout')}<span>Keluar</span></button></div></header><div id="content" aria-live="polite"><div class="loading-state"><div></div><p>Memuat data ADO...</p></div></div><footer class="main-footer"><span>ADO <span>&middot;</span> ICT - Technical Support Store</span><span>1 Database Terpadu (Tabel ado_*)</span></footer></main><dialog id="dialog"></dialog>`;
 
  document.querySelector('#toggleSidebar').onclick = () => {
   const collapsed = document.documentElement.classList.toggle('sidebar-collapsed');
@@ -120,6 +129,8 @@ async function renderAdo(quiet = false) {
  if (!adoMe) return;
  if (adoMe.role === 'admin_it' && adoView !== 'Confirm' && adoView !== 'Reports') {
   adoView = 'Confirm';
+ } else if (adoMe.role === 'accounting' && !['Mutation', 'Assets', 'Reports'].includes(adoView)) {
+  adoView = 'Mutation';
  }
  if (!quiet) adoShell();
  const c = document.querySelector('#content');
@@ -154,9 +165,10 @@ async function renderAdo(quiet = false) {
    adoAssets = await adoApi('assets');
    html = renderAdoAssets();
   } else if (currentView === 'Mutation') {
-   const [allAssets, mutations] = await Promise.all([adoApi('assets'), adoApi('mutations')]);
+   const [allAssets, mutations, orders] = await Promise.all([adoApi('assets'), adoApi('mutations'), adoApi('mutation-orders')]);
    adoAssets = allAssets;
    adoMutations = mutations;
+   adoMutationOrders = orders;
    html = renderAdoMutations();
   } else if (currentView === 'DO') {
    adoOrders = await adoApi('do');
@@ -339,11 +351,46 @@ function renderAdoDoForm() {
  </div>`;
 }
 
+function adoMutasiStageLabel(st) {
+ return {
+  pending_area: 'Menunggu Area Manager',
+  pending_receiver: 'Menunggu Store Penerima',
+  pending_accounting: 'Menunggu Accounting',
+  approved: 'Selesai / Approved',
+ }[st] || st;
+}
+
 function renderAdoMutations() {
+ const orderRows = adoMutationOrders.map(o => {
+  const itemSummary = (o.items || []).map(it => `${it.device_name}${it.serial_number ? ` (${it.serial_number})` : ''}`).join(', ');
+  const pinHtml = o.receiver_pin ? `<span class="pc-chip" title="PIN untuk Store Penerima">PIN: <b>${esc(o.receiver_pin)}</b></span>` : '';
+  const approveBtn = adoIsAccountingOrAdmin() && o.status === 'pending_accounting'
+   ? `<button type="button" class="ado-confirm-btn" data-acc-approve-mut="${o.id}">Approve &amp; No SAP</button>`
+   : '';
+  return `<tr>
+   <td><b>${esc(o.doc_number)}</b>${o.sap_number ? `<br><small class="muted">SAP: ${esc(o.sap_number)}</small>` : ''}</td>
+   <td>${esc(o.from_store_name)} &rarr; <b>${esc(o.to_store_name)}</b><br><small class="muted">${esc(o.reason)} &middot; ${esc(o.mutation_date)}</small></td>
+   <td>${esc(itemSummary || '-')}</td>
+   <td>${esc(o.area_manager_name || '-')} <small class="muted">(${esc(o.area_label || 'Area Manager 01')})</small></td>
+   <td><span class="mutasi-stage-badge mutasi-st-${esc(o.status)}">${esc(adoMutasiStageLabel(o.status))}</span> ${pinHtml}</td>
+   <td style="text-align:right;white-space:nowrap">
+    ${approveBtn}
+    <button type="button" class="secondary compact" data-mut-share="${o.id}">Link &amp; QR</button>
+    <a class="secondary compact" style="text-decoration:none;padding:5px 9px;border-radius:8px;font-size:12px" href="/api/ado/mutation-orders/${o.id}/print" target="_blank" rel="noopener">&#128424; Print</a>
+   </td>
+  </tr>`;
+ });
  const rows = adoMutations.map(m => `<tr><td>${esc(adoDateId(m.moved_at))}</td><td><b>${esc(m.device_name)}</b></td><td><code>${esc(m.serial_number || '-')}</code></td><td>${esc(m.from_store_name)}</td><td><b>${esc(m.to_store_name)}</b></td><td>${esc(m.moved_by)}</td><td>${esc(m.notes || '-')}</td></tr>`);
- return `<div class="page-heading"><div><span class="eyebrow">PERGERAKAN ASET</span><h2>Mutasi Perangkat</h2></div><button id="addAdoMutation">+ Buat Mutasi Perangkat</button></div>
- <p class="page-description">Pindahkan kepemilikan perangkat dari satu Store ke Store lain beserta pencatatan historinya.</p>
- <div class="card table-card">${table(['Tanggal', 'Perangkat', 'Serial Number', 'Dari Store', 'Ke Store Tujuan', 'Dipindahkan Oleh', 'Keterangan'], rows, 'Belum ada riwayat mutasi perangkat', 'Klik tombol + Buat Mutasi Perangkat untuk memindahkan aset antar store.')}</div>`;
+ return `<div class="page-heading"><div><span class="eyebrow">PERGERAKAN ASET</span><h2>${adoMe?.role === 'accounting' ? 'Approval Mutasi Asset' : 'Mutasi Perangkat'}</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap">${adoMe?.role !== 'accounting' ? `<button type="button" id="openNewPublicMutasiFromApp" class="secondary compact">+ Form Mutasi 4-Tahap (OPS/MA)</button><button id="addAdoMutation">+ Mutasi Cepat (IT)</button>` : ''}</div></div>
+ <p class="page-description">Alur Mutasi Asset Antar Store: <b>Store Pengirim &rarr; Area Manager &rarr; Store Penerima (PIN) &rarr; Accounting (No SAP)</b>.</p>
+ <div class="card table-card" style="margin-bottom:20px">
+  <div style="padding:16px 20px 6px"><h3 style="margin:0">Form Mutasi Antar Store (${adoMutationOrders.length})</h3></div>
+  ${table(['No. Dokumen', 'Asal &rarr; Tujuan', 'Perangkat', 'Area Manager', 'Status &amp; PIN', 'Aksi'], orderRows, 'Belum ada form mutasi antar store', 'Store Pengirim dapat membuat mutasi dari halaman depan (Mutasi Asset Antar Store).')}
+ </div>
+ <div class="card table-card">
+  <div style="padding:16px 20px 6px"><h3 style="margin:0">Log Riwayat Perpindahan Aset</h3></div>
+  ${table(['Tanggal', 'Perangkat', 'Serial Number', 'Dari Store', 'Ke Store', 'Oleh', 'Keterangan'], rows, 'Belum ada log perpindahan aset', 'Perpindahan aset yang telah selesai akan tercatat di sini.')}
+ </div>`;
 }
 
 function renderAdoCatalog() {
@@ -532,8 +579,19 @@ function bindAdoEvents() {
   }
  });
  document.querySelector('#doScanBtn')?.addEventListener('click', () => {
-  const sn = document.querySelector('#doItemSerial');
-  if (sn) { sn.focus(); sn.select(); toast('Siap scan barcode ke kolom Serial Number'); }
+  if (typeof openCameraScanner === 'function') {
+   openCameraScanner({
+    fallbackFocusSelector: '#doItemSerial',
+    title: 'Scan QR / Barcode Serial Number (DO)',
+    onScan: val => {
+     const sn = document.querySelector('#doItemSerial');
+     if (sn) { sn.value = val; sn.focus(); }
+    },
+   });
+  } else {
+   const sn = document.querySelector('#doItemSerial');
+   if (sn) { sn.focus(); sn.select(); toast('Siap scan barcode ke kolom Serial Number'); }
+  }
  });
  document.querySelector('#doAddItemBtn')?.addEventListener('click', () => {
   const category = document.querySelector('#doItemCategory')?.value || 'Pos 1';
@@ -574,6 +632,15 @@ function bindAdoEvents() {
 
  // Mutation
  document.querySelector('#addAdoMutation')?.addEventListener('click', showAdoMutationModal);
+ document.querySelector('#openNewPublicMutasiFromApp')?.addEventListener('click', () => openPublicMutasiModal('', () => renderAdo()));
+ document.querySelectorAll('[data-acc-approve-mut]').forEach(b => b.onclick = () => {
+  const order = adoMutationOrders.find(x => x.id == b.dataset.accApproveMut);
+  if (order) showAccountingApproveMutationModal(order);
+ });
+ document.querySelectorAll('[data-mut-share]').forEach(b => b.onclick = () => {
+  const order = adoMutationOrders.find(x => x.id == b.dataset.mutShare);
+  if (order) showMutationOrderShareModal(order);
+ });
 
  // Catalog (Super Admin)
  document.querySelector('#addCatalogCategoryForm')?.addEventListener('submit', async e => {
@@ -852,8 +919,13 @@ function showAdoAssetModal(a = {}) {
    <select name="device_name" id="modalAssetDevice">${devs.map(d => `<option value="${esc(d.name)}" ${a.device_name === d.name ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>
    <label>Merk</label>
    <input name="brand" value="${esc(a.brand || '')}" placeholder="Contoh: WEARNES, TPLINK, EPSON" required>
+   <label>Kode Asset (Opsional)</label>
+   <input name="asset_code" value="${esc(a.asset_code || '')}" placeholder="Contoh: INS-04-20219-000074">
    <label>Serial Number</label>
-   <input name="serial_number" value="${esc(a.serial_number || '')}" placeholder="Contoh: W23G00725" required>
+   <div style="display:flex;gap:8px;align-items:center">
+    <input name="serial_number" id="modalAssetSerial" value="${esc(a.serial_number || '')}" placeholder="Contoh: W23G00725" required style="flex:1">
+    <button type="button" id="modalAssetScanBtn" class="ado-scan-btn" title="Scan QR / Barcode Serial Number">${adoIcon('Scan')} <span>Scan</span></button>
+   </div>
    <label>Tahun Perangkat</label>
    <input name="purchase_year" id="modalAssetYear" type="number" min="1995" max="2100" value="${a.purchase_year || curYear}" required>
    <label>Tanggal &amp; Bulan Perangkat (Opsional)</label>
@@ -868,6 +940,21 @@ function showAdoAssetModal(a = {}) {
    <input name="notes" value="${esc(a.notes || '')}" placeholder="Opsional">
    <p><button>Simpan Perangkat</button></p>
   </form>`);
+ document.querySelector('#modalAssetScanBtn')?.addEventListener('click', () => {
+  if (typeof openCameraScanner === 'function') {
+   openCameraScanner({
+    fallbackFocusSelector: '#modalAssetSerial',
+    title: 'Scan QR / Barcode Serial Number',
+    onScan: val => {
+     const el = document.querySelector('#modalAssetSerial');
+     if (el) { el.value = val; el.focus(); }
+    },
+   });
+  } else {
+   const el = document.querySelector('#modalAssetSerial');
+   if (el) { el.focus(); el.select(); }
+  }
+ });
  document.querySelector('#modalAssetCategory')?.addEventListener('change', e => {
   const devSelect = document.querySelector('#modalAssetDevice');
   if (devSelect) {
@@ -1304,6 +1391,7 @@ function showAdoUserModal(u = {}) {
    <select name="role" id="adoUserRoleSelect">
     <option value="ts" ${u.role === 'ts' || !u.role ? 'selected' : ''}>TS (Technical Support)</option>
     <option value="admin_it" ${u.role === 'admin_it' ? 'selected' : ''}>Admin IT (Konfirmasi DO &amp; Kelola Store)</option>
+    <option value="accounting" ${u.role === 'accounting' ? 'selected' : ''}>Accounting (Approval Mutasi &amp; No SAP)</option>
     <option value="super_admin" ${u.role === 'super_admin' ? 'selected' : ''}>Super Admin (Akses Penuh)</option>
    </select>
    <div id="adoUserStoreAssignBox">
@@ -1359,3 +1447,401 @@ function showAdoUserModal(u = {}) {
   } catch (err) { toast(err.message, 'error'); }
  };
 }
+
+function adoSigPadHtml(prefix, title = 'Tanda Tangan Digital') {
+ return `<div class="mutasi-sig-box">
+  <div class="mutasi-sig-head"><span>${esc(title)}</span><button type="button" class="btn btn-sm" id="${prefix}SigClearBtn">Hapus TTD</button></div>
+  <canvas id="${prefix}SigCanvas" width="380" height="130" class="mutasi-sig-canvas"></canvas>
+ </div>`;
+}
+
+function adoBindSigPad(prefix, initialSig = '') {
+ const canvas = document.getElementById(prefix + 'SigCanvas');
+ const clearBtn = document.getElementById(prefix + 'SigClearBtn');
+ if (!canvas) return () => initialSig || '';
+ const ctx = canvas.getContext('2d');
+ ctx.fillStyle = '#ffffff';
+ ctx.fillRect(0, 0, canvas.width, canvas.height);
+ let hasInk = false;
+ if (initialSig && initialSig.startsWith('data:image/')) {
+  const img = new Image();
+  img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); hasInk = true; };
+  img.src = initialSig;
+ }
+ let drawing = false;
+ const pos = (e) => {
+  const r = canvas.getBoundingClientRect();
+  const pt = e.touches ? e.touches[0] : e;
+  return { x: (pt.clientX - r.left) * (canvas.width / r.width), y: (pt.clientY - r.top) * (canvas.height / r.height) };
+ };
+ const start = (e) => { drawing = true; hasInk = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
+ const move = (e) => {
+  if (!drawing) return;
+  const p = pos(e);
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  e.preventDefault();
+ };
+ const end = () => { drawing = false; };
+ canvas.addEventListener('mousedown', start);
+ canvas.addEventListener('mousemove', move);
+ window.addEventListener('mouseup', end);
+ canvas.addEventListener('touchstart', start, { passive: false });
+ canvas.addEventListener('touchmove', move, { passive: false });
+ canvas.addEventListener('touchend', end);
+ clearBtn?.addEventListener('click', () => {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  hasInk = false;
+ });
+ return () => (hasInk ? canvas.toDataURL('image/png') : '');
+}
+
+function showMutationOrderShareModal(order) {
+ document.querySelectorAll('dialog.ado-dlg').forEach(d => d.remove());
+ const dlg = document.createElement('dialog');
+ dlg.className = 'ado-dlg modal-dialog';
+ const shareUrl = `${location.origin}${location.pathname}?mutasi=${encodeURIComponent(order.token)}`;
+ const qrHtml = typeof renderQrSvg === 'function' ? renderQrSvg(shareUrl, 170) : '';
+ const pinBlock = order.receiver_pin
+  ? `<div class="mutasi-pin-box">
+     <div class="mutasi-pin-label">PIN Store Penerima (Kirim ke PIC ${esc(order.to_store_name || 'Penerima')})</div>
+     <div class="mutasi-pin-code">${esc(order.receiver_pin)}</div>
+     <div class="muted" style="font-size:12px">Simpan atau catat PIN 6 digit ini. Store penerima wajib memasukkan PIN ini saat konfirmasi penerimaan barang.</div>
+    </div>`
+  : '';
+ dlg.innerHTML = `<div class="modal-head"><h3>Link &amp; QR Mutasi Antar Store</h3><button class="btn btn-sm" id="mutShareClose">✕</button></div>
+  <div class="modal-body mutasi-share-body">
+   <div class="mutasi-doc-pill">${esc(order.doc_number)} · ${esc(order.from_store_name)} → ${esc(order.to_store_name)}</div>
+   ${pinBlock}
+   <div class="mutasi-qr-wrap">${qrHtml}</div>
+   <label>Link Approval Area Manager &amp; Store Penerima
+    <div style="display:flex;gap:8px;margin-top:4px">
+     <input id="mutShareUrlInput" readonly value="${esc(shareUrl)}" style="flex:1">
+     <button type="button" class="btn btn-primary" id="mutShareCopyBtn">Copy Link</button>
+    </div>
+   </label>
+   <div class="muted" style="font-size:12px">Bagikan link/QR ini ke <b>Area Manager</b> untuk TTD terlebih dahulu, lalu ke <b>PIC Store Penerima</b> bersama PIN di atas.</div>
+  </div>
+  <div class="modal-foot">
+   <a class="btn" href="${esc(shareUrl)}" target="_blank" rel="noopener">Buka Link Mutasi</a>
+   <button type="button" class="btn btn-primary" id="mutShareDoneBtn">Selesai</button>
+  </div>`;
+ document.body.appendChild(dlg);
+ dlg.showModal();
+ dlg.querySelector('#mutShareClose')?.addEventListener('click', () => dlg.close());
+ dlg.querySelector('#mutShareDoneBtn')?.addEventListener('click', () => dlg.close());
+ dlg.querySelector('#mutShareCopyBtn')?.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(shareUrl); toast('Link mutasi disalin.'); }
+  catch (_) { dlg.querySelector('#mutShareUrlInput')?.select(); document.execCommand('copy'); toast('Link mutasi disalin.'); }
+ });
+ dlg.addEventListener('close', () => dlg.remove());
+}
+
+function showAccountingApproveMutationModal(order) {
+ document.querySelectorAll('dialog.ado-dlg').forEach(d => d.remove());
+ const dlg = document.createElement('dialog');
+ dlg.className = 'ado-dlg modal-dialog';
+ const itemsHtml = (order.items || []).map((it, idx) => `<tr>
+  <td>${idx + 1}</td>
+  <td>${esc(it.asset_code || '-')}</td>
+  <td>${esc(it.device_name || '-')} ${it.brand ? `<span class="muted">(${esc(it.brand)})</span>` : ''}</td>
+  <td>${esc(it.serial_number || '-')}</td>
+  <td>${esc(it.qty || 1)}</td>
+ </tr>`).join('');
+ const defaultName = (typeof state !== 'undefined' && state.user?.name) ? state.user.name : '';
+ const defaultSig = (typeof state !== 'undefined' && state.user?.signature) ? state.user.signature : '';
+ dlg.innerHTML = `<div class="modal-head"><h3>Approval Accounting — ${esc(order.doc_number)}</h3><button class="btn btn-sm" id="accMutClose">✕</button></div>
+  <form id="accMutForm" class="modal-body">
+   <div class="mutasi-summary-grid">
+    <div><span class="muted">Dari Store</span><div><b>${esc(order.from_store_name)}</b></div></div>
+    <div><span class="muted">Ke Store</span><div><b>${esc(order.to_store_name)}</b></div></div>
+    <div><span class="muted">Pengirim</span><div>${esc(order.sender_name || '-')}</div></div>
+    <div><span class="muted">${esc(order.area_label || 'Area Manager')}</span><div>${esc(order.area_manager_name || '-')}</div></div>
+    <div><span class="muted">Penerima</span><div>${esc(order.receiver_name || '-')}</div></div>
+    <div><span class="muted">Tanggal</span><div>${esc(order.mutation_date || '-')}</div></div>
+   </div>
+   <div class="table-wrap" style="margin:10px 0"><table class="tbl"><thead><tr><th>No</th><th>Kode Asset</th><th>Perangkat</th><th>Serial Number</th><th>Qty</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
+   <div class="form-grid-2">
+    <label>NO SAP *<input id="accSapInput" required placeholder="Contoh: 4900012345" value="${esc(order.sap_number || '')}"></label>
+    <label>Nama Accounting *<input id="accNameInput" required value="${esc(order.accounting_name || defaultName)}"></label>
+   </div>
+   ${adoSigPadHtml('accMut', 'Tanda Tangan Accounting')}
+   <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px">
+    <input type="checkbox" id="accSaveSigChk" ${defaultSig ? '' : 'checked'}> Simpan tanda tangan ini sebagai TTD default akun saya
+   </label>
+   <div class="modal-foot" style="padding:12px 0 0">
+    <button type="button" class="btn" id="accMutCancel">Batal</button>
+    <button type="submit" class="btn btn-primary">Approve &amp; Pindahkan Asset</button>
+   </div>
+  </form>`;
+ document.body.appendChild(dlg);
+ dlg.showModal();
+ const getSig = adoBindSigPad('accMut', defaultSig);
+ dlg.querySelector('#accMutClose')?.addEventListener('click', () => dlg.close());
+ dlg.querySelector('#accMutCancel')?.addEventListener('click', () => dlg.close());
+ dlg.addEventListener('close', () => dlg.remove());
+ dlg.querySelector('#accMutForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const sap = dlg.querySelector('#accSapInput').value.trim();
+  const accName = dlg.querySelector('#accNameInput').value.trim();
+  const sig = getSig();
+  if (!sap) { toast('NO SAP wajib diisi.', 'error'); return; }
+  if (!sig) { toast('Tanda tangan Accounting wajib diisi.', 'error'); return; }
+  try {
+   await adoApi(`mutation-orders/${order.id}/approve`, {
+    sap_number: sap,
+    accounting_name: accName,
+    accounting_signature: sig,
+    save_user_signature: !!dlg.querySelector('#accSaveSigChk')?.checked,
+   }, 'POST');
+   dlg.close();
+   toast('Mutasi di-approve Accounting & asset berhasil dipindahkan.');
+   await renderAdo();
+  } catch (err) { toast(err.message, 'error'); }
+ };
+}
+
+async function openPublicMutasiModal(token = '', onDone = null) {
+ document.querySelectorAll('dialog.ado-dlg').forEach(d => d.remove());
+ const dlg = document.createElement('dialog');
+ dlg.className = 'ado-dlg modal-dialog mutasi-public-dlg';
+ dlg.innerHTML = `<div class="modal-head"><h3>Mutasi Asset Antar Store</h3><button class="btn btn-sm" id="pubMutClose">✕</button></div>
+  <div class="modal-body" id="pubMutBody"><div class="muted" style="padding:20px;text-align:center">Memuat data mutasi...</div></div>`;
+ document.body.appendChild(dlg);
+ dlg.showModal();
+ dlg.querySelector('#pubMutClose')?.addEventListener('click', () => dlg.close());
+ dlg.addEventListener('close', () => dlg.remove());
+
+ const body = dlg.querySelector('#pubMutBody');
+ const pubReq = async (path, data = null, method = 'GET') => {
+  const opts = { method, headers: {} };
+  if (data !== null) {
+   opts.headers['Content-Type'] = 'application/json';
+   opts.body = JSON.stringify(data);
+  }
+  const res = await fetch('/api/ado/public/' + path, opts);
+  const txt = await res.text();
+  let json = {};
+  try { json = JSON.parse(txt); } catch (_) { json = { detail: txt }; }
+  if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+  return json;
+ };
+
+ if (token) {
+  try {
+   const order = await pubReq('mutasi/' + encodeURIComponent(token));
+   const itemsHtml = (order.items || []).map((it, idx) => `<tr>
+    <td>${idx + 1}</td><td>${esc(it.asset_code || '-')}</td><td>${esc(it.device_name || '-')}</td><td>${esc(it.serial_number || '-')}</td><td>${esc(it.qty || 1)}</td>
+   </tr>`).join('');
+   const statusMap = {
+    pending_area: 'Menunggu TTD Area Manager',
+    pending_receiver: 'Menunggu Konfirmasi & PIN Store Penerima',
+    pending_accounting: 'Menunggu Approval & NO SAP Accounting',
+    approved: 'Selesai (Approved Accounting)',
+   };
+   let actionHtml = '';
+   if (order.status === 'pending_area') {
+    actionHtml = `<form id="pubAreaForm" class="mutasi-stage-card">
+     <h4>Tahap 2: Tanda Tangan Area Manager</h4>
+     <div class="form-grid-2">
+      <label>Label Jabatan Area *<input id="pubAreaLabel" required value="${esc(order.area_label || 'Area Manager 01')}"></label>
+      <label>Nama Area Manager *<input id="pubAreaName" required placeholder="Nama lengkap Area Manager"></label>
+     </div>
+     ${adoSigPadHtml('pubArea', 'Tanda Tangan Area Manager')}
+     <div class="modal-foot" style="padding:12px 0 0"><button type="submit" class="btn btn-primary">Simpan TTD Area Manager</button></div>
+    </form>`;
+   } else if (order.status === 'pending_receiver') {
+    actionHtml = `<form id="pubRecvForm" class="mutasi-stage-card">
+     <h4>Tahap 3: Konfirmasi PIC Store Penerima (${esc(order.to_store_name)})</h4>
+     <div class="form-grid-2">
+      <label>PIN Store Penerima (6 Digit) *<input id="pubRecvPin" required maxlength="6" placeholder="Masukkan 6 digit PIN"></label>
+      <label>Nama PIC Penerima *<input id="pubRecvName" required placeholder="Nama lengkap penerima"></label>
+     </div>
+     ${adoSigPadHtml('pubRecv', 'Tanda Tangan PIC Penerima')}
+     <div class="modal-foot" style="padding:12px 0 0"><button type="submit" class="btn btn-primary">Verifikasi PIN &amp; Terima Barang</button></div>
+    </form>`;
+   } else {
+    const printHref = `/api/ado/mutation-orders/${order.id}/print?token=${encodeURIComponent(order.token)}`;
+    actionHtml = `<div class="mutasi-stage-card">
+     <h4>Status: ${esc(statusMap[order.status] || order.status)}</h4>
+     <p class="muted">${order.status === 'pending_accounting' ? 'TTD Area Manager dan Store Penerima sudah lengkap. Dokumen ini menunggu input NO SAP &amp; approval dari tim Accounting.' : `Dokumen telah disetujui Accounting (${esc(order.accounting_name || '-')}) dengan NO SAP ${esc(order.sap_number || '-')}.`}</p>
+     <a class="btn btn-primary" href="${esc(printHref)}" target="_blank" rel="noopener">Cetak Form Mutasi Asset</a>
+    </div>`;
+   }
+   body.innerHTML = `<div class="mutasi-doc-pill">${esc(order.doc_number)} · ${esc(statusMap[order.status] || order.status)}</div>
+    <div class="mutasi-summary-grid">
+     <div><span class="muted">Dari Store</span><div><b>${esc(order.from_store_name)}</b></div></div>
+     <div><span class="muted">Ke Store</span><div><b>${esc(order.to_store_name)}</b></div></div>
+     <div><span class="muted">Tanggal</span><div>${esc(order.mutation_date || '-')}</div></div>
+     <div><span class="muted">Pengirim</span><div>${esc(order.sender_name || '-')}</div></div>
+     <div><span class="muted">Area</span><div>${esc(order.area_manager_name || '-')} (${esc(order.area_label || 'Area Manager 01')})</div></div>
+     <div><span class="muted">Penerima</span><div>${esc(order.receiver_name || '-')}</div></div>
+    </div>
+    ${order.reason ? `<div class="muted" style="margin:6px 0">Keterangan: ${esc(order.reason)}</div>` : ''}
+    <div class="table-wrap" style="margin:10px 0"><table class="tbl"><thead><tr><th>No</th><th>Kode Asset</th><th>Perangkat</th><th>Serial Number</th><th>Qty</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
+    ${actionHtml}`;
+
+   if (order.status === 'pending_area') {
+    const getSig = adoBindSigPad('pubArea');
+    body.querySelector('#pubAreaForm').onsubmit = async (e) => {
+     e.preventDefault();
+     const sig = getSig();
+     if (!sig) { toast('Tanda tangan Area Manager wajib diisi.', 'error'); return; }
+     try {
+      const updated = await pubReq(`mutasi/${encodeURIComponent(token)}/area`, {
+       area_label: body.querySelector('#pubAreaLabel').value.trim(),
+       area_manager_name: body.querySelector('#pubAreaName').value.trim(),
+       area_signature: sig,
+      }, 'POST');
+      toast('TTD Area Manager berhasil disimpan.');
+      dlg.close();
+      showMutationOrderShareModal(updated);
+     } catch (err) { toast(err.message, 'error'); }
+    };
+   } else if (order.status === 'pending_receiver') {
+    const getSig = adoBindSigPad('pubRecv');
+    body.querySelector('#pubRecvForm').onsubmit = async (e) => {
+     e.preventDefault();
+     const sig = getSig();
+     if (!sig) { toast('Tanda tangan PIC Penerima wajib diisi.', 'error'); return; }
+     try {
+      await pubReq(`mutasi/${encodeURIComponent(token)}/receive`, {
+       pin: body.querySelector('#pubRecvPin').value.trim(),
+       receiver_name: body.querySelector('#pubRecvName').value.trim(),
+       receiver_signature: sig,
+      }, 'POST');
+      toast('Penerimaan mutasi berhasil dikonfirmasi. Menunggu approval Accounting.');
+      dlg.close();
+      openPublicMutasiModal(token, onDone);
+     } catch (err) { toast(err.message, 'error'); }
+    };
+   }
+  } catch (err) {
+   body.innerHTML = `<div class="empty">${esc(err.message || 'Dokumen mutasi tidak ditemukan.')}</div>`;
+  }
+  return;
+ }
+
+ // Stage 1: Create new store-to-store mutation order
+ try {
+  const stores = await pubReq('mutasi/stores');
+  const opts = stores.map(s => `<option value="${s.id}">${esc(s.store_code)} — ${esc(s.name)}</option>`).join('');
+  const today = new Date().toISOString().slice(0, 10);
+  body.innerHTML = `<form id="pubCreateMutForm">
+   <div class="form-grid-2">
+    <label>Dari Store (Pengirim) *<select id="pubFromStore" required><option value="">-- Pilih Store Pengirim --</option>${opts}</select></label>
+    <label>Ke Store (Penerima) *<select id="pubToStore" required><option value="">-- Pilih Store Penerima --</option>${opts}</select></label>
+    <label>Tanggal Mutasi *<input id="pubMutDate" type="date" required value="${today}"></label>
+    <label>Nama PIC Store Pengirim *<input id="pubSenderName" required placeholder="Nama lengkap PIC pengirim"></label>
+   </div>
+   <label>Keterangan / Alasan Mutasi<input id="pubMutReason" placeholder="Contoh: Peminjaman / Relokasi perangkat antar cabang"></label>
+   <div class="mutasi-items-head">
+    <b>Daftar Perangkat yang Dimutasikan</b>
+    <button type="button" class="btn btn-sm" id="pubAddItemBtn">+ Tambah Baris</button>
+   </div>
+   <div id="pubItemsWrap" class="mutasi-items-wrap"></div>
+   ${adoSigPadHtml('pubSend', 'Tanda Tangan PIC Store Pengirim')}
+   <div class="modal-foot" style="padding:12px 0 0">
+    <button type="button" class="btn" id="pubCreateCancel">Batal</button>
+    <button type="submit" class="btn btn-primary">Buat Form &amp; Generate PIN Penerima</button>
+   </div>
+  </form>`;
+
+  const itemsWrap = body.querySelector('#pubItemsWrap');
+  const fromSel = body.querySelector('#pubFromStore');
+  let storeAssets = [];
+
+  const renderAssetDatalist = () => {
+   let dl = body.querySelector('#pubAssetSnList');
+   if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'pubAssetSnList';
+    body.appendChild(dl);
+   }
+   dl.innerHTML = storeAssets.map(a => `<option value="${esc(a.serial_number)}">${esc(a.device_name)} (${esc(a.asset_code || 'No Kode')})</option>`).join('');
+  };
+
+  const addItemRow = () => {
+   const row = document.createElement('div');
+   row.className = 'mutasi-item-row';
+   row.innerHTML = `<input class="mi-sn" list="pubAssetSnList" placeholder="Serial Number *" required>
+    <button type="button" class="btn btn-sm mi-scan" title="Scan Barcode / QR">Scan</button>
+    <input class="mi-code" placeholder="Kode Asset (opsional)">
+    <input class="mi-name" placeholder="Nama Perangkat *" required>
+    <input class="mi-brand" placeholder="Merk">
+    <input class="mi-qty" type="number" min="1" value="1" style="width:68px">
+    <input type="hidden" class="mi-aid" value="">
+    <button type="button" class="btn btn-sm mi-del" title="Hapus">✕</button>`;
+   const snIn = row.querySelector('.mi-sn');
+   const fillFromAsset = (snVal) => {
+    const found = storeAssets.find(a => (a.serial_number || '').toLowerCase() === (snVal || '').trim().toLowerCase());
+    if (found) {
+     row.querySelector('.mi-aid').value = found.id;
+     row.querySelector('.mi-code').value = found.asset_code || '';
+     row.querySelector('.mi-name').value = found.device_name || '';
+     row.querySelector('.mi-brand').value = found.brand || '';
+    }
+   };
+   snIn.addEventListener('change', () => fillFromAsset(snIn.value));
+   snIn.addEventListener('input', () => fillFromAsset(snIn.value));
+   row.querySelector('.mi-scan').addEventListener('click', () => {
+    if (typeof openCameraScanner === 'function') {
+     openCameraScanner((code) => { snIn.value = code; fillFromAsset(code); });
+    }
+   });
+   row.querySelector('.mi-del').addEventListener('click', () => {
+    if (itemsWrap.children.length > 1) row.remove();
+   });
+   itemsWrap.appendChild(row);
+  };
+
+  addItemRow();
+  body.querySelector('#pubAddItemBtn').addEventListener('click', addItemRow);
+  fromSel.addEventListener('change', async () => {
+   const sid = fromSel.value;
+   storeAssets = sid ? await pubReq('mutasi/assets?store_id=' + encodeURIComponent(sid)) : [];
+   renderAssetDatalist();
+  });
+
+  const getSig = adoBindSigPad('pubSend');
+  body.querySelector('#pubCreateCancel')?.addEventListener('click', () => dlg.close());
+  body.querySelector('#pubCreateMutForm').onsubmit = async (e) => {
+   e.preventDefault();
+   const fromId = Number(fromSel.value);
+   const toId = Number(body.querySelector('#pubToStore').value);
+   if (!fromId || !toId || fromId === toId) { toast('Store pengirim dan penerima harus dipilih dan berbeda.', 'error'); return; }
+   const sig = getSig();
+   if (!sig) { toast('Tanda tangan PIC Store Pengirim wajib diisi.', 'error'); return; }
+   const items = Array.from(itemsWrap.querySelectorAll('.mutasi-item-row')).map(r => ({
+    asset_id: Number(r.querySelector('.mi-aid').value) || null,
+    serial_number: r.querySelector('.mi-sn').value.trim(),
+    asset_code: r.querySelector('.mi-code').value.trim(),
+    device_name: r.querySelector('.mi-name').value.trim(),
+    brand: r.querySelector('.mi-brand').value.trim(),
+    qty: Math.max(1, Number(r.querySelector('.mi-qty').value) || 1),
+   })).filter(it => it.serial_number && it.device_name);
+   if (!items.length) { toast('Minimal 1 perangkat harus diisi lengkap.', 'error'); return; }
+   try {
+    const created = await pubReq('mutasi', {
+     from_store_id: fromId,
+     to_store_id: toId,
+     mutation_date: body.querySelector('#pubMutDate').value,
+     reason: body.querySelector('#pubMutReason').value.trim(),
+     sender_name: body.querySelector('#pubSenderName').value.trim(),
+     sender_signature: sig,
+     items,
+    }, 'POST');
+    dlg.close();
+    showMutationOrderShareModal(created);
+    if (typeof onDone === 'function') onDone(created);
+   } catch (err) { toast(err.message, 'error'); }
+  };
+ } catch (err) {
+  body.innerHTML = `<div class="empty">${esc(err.message || 'Gagal memuat daftar store.')}</div>`;
+ }
+}
+

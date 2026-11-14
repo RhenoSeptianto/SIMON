@@ -14,7 +14,7 @@ from backend.main import Base, engine, DB, User, db, now, digest, password, limi
 
 WIB = timezone(timedelta(hours=7))
 ROMAN_MONTHS = ('I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII')
-ADO_ROLES = {'super_admin', 'admin_it', 'ts'}
+ADO_ROLES = {'super_admin', 'admin_it', 'ts', 'accounting'}
 
 DEFAULT_CATALOG_TREE = [
  ('PERANGKAT', 'Back Office', ['PC OFFICE', 'MONITOR OFFICE', 'UPS', 'PRINTER OFFICE']),
@@ -69,6 +69,7 @@ class AdoAsset(Base):
  __tablename__ = 'ado_assets'
  id = Column(Integer, primary_key=True)
  store_id = Column(Integer, ForeignKey('ado_stores.id'), nullable=False, index=True)
+ asset_code = Column(String(80), default='', nullable=False)
  group_type = Column(String(40), default='PERANGKAT', nullable=False, index=True)
  category = Column(String(100), nullable=False)
  device_name = Column(String(160), nullable=False)
@@ -138,6 +139,48 @@ class AdoAssetLog(Base):
  created_at = Column(Float, default=now, index=True)
 
 
+class AdoMutationOrder(Base):
+ __tablename__ = 'ado_mutation_orders'
+ id = Column(Integer, primary_key=True)
+ doc_number = Column(String(80), unique=True, nullable=False, index=True)
+ token = Column(String(64), unique=True, nullable=False, index=True)
+ receiver_pin = Column(String(16), nullable=False)
+ from_store_id = Column(Integer, ForeignKey('ado_stores.id'), nullable=False, index=True)
+ from_store_name = Column(String(200), default='', nullable=False)
+ to_store_id = Column(Integer, ForeignKey('ado_stores.id'), nullable=False, index=True)
+ to_store_name = Column(String(200), default='', nullable=False)
+ mutation_date = Column(String(20), default='', nullable=False)
+ reason = Column(String(240), default='', nullable=False)
+ sap_number = Column(String(80), default='', nullable=False)
+ status = Column(String(40), default='pending_area', nullable=False, index=True)
+ sender_name = Column(String(160), default='', nullable=False)
+ sender_signature = Column(Text, default='', nullable=False)
+ sender_at = Column(Float, default=now)
+ area_manager_name = Column(String(160), default='', nullable=False)
+ area_label = Column(String(120), default='Area Manager 01', nullable=False)
+ area_signature = Column(Text, default='', nullable=False)
+ area_at = Column(Float, nullable=True)
+ receiver_name = Column(String(160), default='', nullable=False)
+ receiver_signature = Column(Text, default='', nullable=False)
+ receiver_at = Column(Float, nullable=True)
+ accounting_name = Column(String(160), default='', nullable=False)
+ accounting_signature = Column(Text, default='', nullable=False)
+ accounting_at = Column(Float, nullable=True)
+ created_at = Column(Float, default=now, index=True)
+
+
+class AdoMutationItem(Base):
+ __tablename__ = 'ado_mutation_items'
+ id = Column(Integer, primary_key=True)
+ order_id = Column(Integer, ForeignKey('ado_mutation_orders.id', ondelete='CASCADE'), nullable=False, index=True)
+ asset_id = Column(Integer, nullable=True, index=True)
+ asset_code = Column(String(80), default='', nullable=False)
+ device_name = Column(String(160), default='', nullable=False)
+ brand = Column(String(120), default='', nullable=False)
+ serial_number = Column(String(160), default='', nullable=False)
+ qty = Column(Integer, default=1, nullable=False)
+
+
 Base.metadata.create_all(engine)
 if 'parent_category' not in {col['name'] for col in inspect(engine).get_columns('ado_catalog')}:
  with engine.begin() as conn:
@@ -152,9 +195,13 @@ if 'delivery_date' not in do_cols:
 if 'approved_signature' not in do_cols:
  with engine.begin() as conn:
   conn.execute(text("ALTER TABLE ado_delivery_orders ADD COLUMN approved_signature TEXT NOT NULL DEFAULT ''"))
-if 'purchase_date' not in {col['name'] for col in inspect(engine).get_columns('ado_assets')}:
+asset_cols = {col['name'] for col in inspect(engine).get_columns('ado_assets')}
+if 'purchase_date' not in asset_cols:
  with engine.begin() as conn:
   conn.execute(text("ALTER TABLE ado_assets ADD COLUMN purchase_date VARCHAR(20) NOT NULL DEFAULT ''"))
+if 'asset_code' not in asset_cols:
+ with engine.begin() as conn:
+  conn.execute(text("ALTER TABLE ado_assets ADD COLUMN asset_code VARCHAR(80) NOT NULL DEFAULT ''"))
 
 
 def ensure_ado_defaults(s: Session):
@@ -227,6 +274,12 @@ def ado_super_admin(u: AdoUser = Depends(ado_user)) -> AdoUser:
  return u
 
 
+def ado_accounting_or_admin(u: AdoUser = Depends(ado_user)) -> AdoUser:
+ if u.role not in ('super_admin', 'accounting'):
+  raise HTTPException(403, 'Akses Accounting atau Super Admin diperlukan')
+ return u
+
+
 def visible_stores_query(s: Session, u: AdoUser):
  q = s.query(AdoStore).order_by(AdoStore.store_code, AdoStore.name)
  if u.role == 'ts':
@@ -235,7 +288,7 @@ def visible_stores_query(s: Session, u: AdoUser):
 
 
 def can_access_store(u: AdoUser, store: AdoStore) -> bool:
- return u.role in ('super_admin', 'admin_it') or store.ts_user_id == u.id
+ return u.role in ('super_admin', 'admin_it', 'accounting') or store.ts_user_id == u.id
 
 
 class AdoLoginInput(BaseModel):
@@ -307,6 +360,7 @@ def ado_me(u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
   pending_count = pending_do.filter(AdoDeliveryOrder.store_id.in_(store_ids)).count() if store_ids else 0
  else:
   pending_count = pending_do.count()
+ pending_mut = s.query(AdoMutationOrder).filter_by(status='pending_accounting').count() if u.role in ('super_admin', 'accounting') else 0
  return {
   'id': u.id,
   'name': u.name,
@@ -315,6 +369,7 @@ def ado_me(u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
   'version': APP_VERSION,
   'portal': 'ado',
   'pending_do_count': pending_count,
+  'pending_mutation_count': pending_mut,
   'signature_data': u.signature_data or '',
  }
 
@@ -648,6 +703,7 @@ def serialize_asset(
   'store_id': a.store_id,
   'store_code': st.store_code if st else '',
   'store_name': st.name if st else '-',
+  'asset_code': a.asset_code or '',
   'group_type': a.group_type,
   'category': a.category,
   'device_name': a.device_name,
@@ -718,6 +774,7 @@ def list_assets(
 
 class AssetInput(BaseModel):
  store_id: int
+ asset_code: str = Field(default='', max_length=80)
  group_type: str = 'PERANGKAT'
  category: str = Field(min_length=1, max_length=100)
  device_name: str = Field(min_length=1, max_length=160)
@@ -738,6 +795,7 @@ def create_asset(v: AssetInput, u: AdoUser = Depends(ado_user), s: Session = Dep
  st_val = v.status if v.status in ('normal', 'perbaikan', 'rusak') else 'normal'
  a = AdoAsset(
   store_id=v.store_id,
+  asset_code=v.asset_code.strip(),
   group_type=grp,
   category=v.category.strip(),
   device_name=v.device_name.strip(),
@@ -770,6 +828,7 @@ def update_asset(id: int, v: AssetInput, u: AdoUser = Depends(ado_user), s: Sess
  prev_status = a.status
  prev_notes = a.notes
  a.store_id = v.store_id
+ a.asset_code = v.asset_code.strip()
  a.group_type = 'CCTV_NETWORK' if v.group_type == 'CCTV_NETWORK' or 'CCTV' in v.category.upper() or 'NETWORK' in v.category.upper() else 'PERANGKAT'
  a.category = v.category.strip()
  a.device_name = v.device_name.strip()
@@ -1793,3 +1852,427 @@ def export_ado_xlsx(u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
   media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   headers={'Content-Disposition': f'attachment; filename="{filename}"'},
  )
+
+
+def next_mutation_doc_number(s: Session) -> str:
+ year = datetime.now(WIB).year
+ prefix = f'OPS/MA/{year}/'
+ existing = s.query(AdoMutationOrder.doc_number).filter(AdoMutationOrder.doc_number.like(f'{prefix}%')).all()
+ seqs = []
+ for (num,) in existing:
+  tail = (num or '').rsplit('/', 1)[-1]
+  if tail.isdigit():
+   seqs.append(int(tail))
+ seq = max(seqs, default=0) + 1
+ return f'{prefix}{seq:02d}'
+
+
+def serialize_mutation_order(o: AdoMutationOrder, items: list[AdoMutationItem], include_pin: bool = False):
+ data = {
+  'id': o.id,
+  'doc_number': o.doc_number,
+  'token': o.token,
+  'from_store_id': o.from_store_id,
+  'from_store_name': o.from_store_name,
+  'to_store_id': o.to_store_id,
+  'to_store_name': o.to_store_name,
+  'mutation_date': o.mutation_date,
+  'reason': o.reason,
+  'sap_number': o.sap_number,
+  'status': o.status,
+  'sender_name': o.sender_name,
+  'has_sender_sig': bool(o.sender_signature),
+  'sender_signature': o.sender_signature,
+  'sender_at': o.sender_at,
+  'area_manager_name': o.area_manager_name,
+  'area_label': o.area_label,
+  'has_area_sig': bool(o.area_signature),
+  'area_signature': o.area_signature,
+  'area_at': o.area_at,
+  'receiver_name': o.receiver_name,
+  'has_receiver_sig': bool(o.receiver_signature),
+  'receiver_signature': o.receiver_signature,
+  'receiver_at': o.receiver_at,
+  'accounting_name': o.accounting_name,
+  'has_accounting_sig': bool(o.accounting_signature),
+  'accounting_signature': o.accounting_signature,
+  'accounting_at': o.accounting_at,
+  'created_at': o.created_at,
+  'items': [{
+   'id': it.id,
+   'asset_id': it.asset_id,
+   'asset_code': it.asset_code,
+   'device_name': it.device_name,
+   'brand': it.brand,
+   'serial_number': it.serial_number,
+   'qty': it.qty,
+  } for it in items],
+ }
+ if include_pin:
+  data['receiver_pin'] = o.receiver_pin
+ return data
+
+
+class PublicMutasiItemInput(BaseModel):
+ asset_id: int | None = None
+ asset_code: str = Field(default='', max_length=80)
+ device_name: str = Field(min_length=1, max_length=160)
+ brand: str = Field(default='', max_length=120)
+ serial_number: str = Field(default='', max_length=160)
+ qty: int = Field(default=1, ge=1, le=999)
+
+
+class PublicMutasiCreateInput(BaseModel):
+ from_store_id: int
+ to_store_id: int
+ mutation_date: str = Field(default='', max_length=20)
+ reason: str = Field(min_length=1, max_length=240)
+ sender_name: str = Field(min_length=1, max_length=160)
+ sender_signature: str = Field(min_length=10)
+ items: list[PublicMutasiItemInput] = Field(min_length=1, max_length=20)
+
+
+class PublicMutasiAreaInput(BaseModel):
+ area_manager_name: str = Field(min_length=1, max_length=160)
+ area_label: str = Field(min_length=1, max_length=120)
+ area_signature: str = Field(min_length=10)
+
+
+class PublicMutasiReceiveInput(BaseModel):
+ pin: str = Field(min_length=4, max_length=16)
+ receiver_name: str = Field(min_length=1, max_length=160)
+ receiver_signature: str = Field(min_length=10)
+
+
+class AccountingApproveMutationInput(BaseModel):
+ sap_number: str = Field(default='', max_length=80)
+ accounting_name: str = Field(default='', max_length=160)
+ accounting_signature: str | None = None
+ save_user_signature: bool = False
+
+
+@router.get('/public/mutasi/stores')
+def public_mutasi_stores(s: Session = Depends(db)):
+ rows = s.query(AdoStore).order_by(AdoStore.store_code, AdoStore.name).all()
+ return [{'id': st.id, 'store_code': st.store_code, 'name': st.name, 'region': st.region} for st in rows]
+
+
+@router.get('/public/mutasi/assets')
+def public_mutasi_assets(store_id: int, s: Session = Depends(db)):
+ rows = s.query(AdoAsset).filter_by(store_id=store_id).order_by(AdoAsset.category, AdoAsset.device_name).all()
+ return [{
+  'id': a.id,
+  'asset_code': a.asset_code or '',
+  'category': a.category,
+  'device_name': a.device_name,
+  'brand': a.brand,
+  'serial_number': a.serial_number,
+  'status': a.status,
+ } for a in rows]
+
+
+@router.post('/public/mutasi')
+def public_create_mutasi(v: PublicMutasiCreateInput, s: Session = Depends(db)):
+ from_st = s.get(AdoStore, v.from_store_id)
+ to_st = s.get(AdoStore, v.to_store_id)
+ if not from_st or not to_st:
+  raise HTTPException(404, 'Store asal atau tujuan tidak ditemukan')
+ if from_st.id == to_st.id:
+  raise HTTPException(422, 'Store tujuan harus berbeda dari store asal')
+ sig = sanitize_signature(v.sender_signature)
+ if not sig:
+  raise HTTPException(422, 'Tanda tangan PIC pengirim wajib diisi')
+ doc_no = next_mutation_doc_number(s)
+ token = secrets.token_urlsafe(24)
+ pin = f'{secrets.randbelow(900000) + 100000}'
+ mut_date = v.mutation_date.strip() or datetime.now(WIB).strftime('%Y-%m-%d')
+ order = AdoMutationOrder(
+  doc_number=doc_no,
+  token=token,
+  receiver_pin=pin,
+  from_store_id=from_st.id,
+  from_store_name=f'{from_st.store_code} · {from_st.name}',
+  to_store_id=to_st.id,
+  to_store_name=f'{to_st.store_code} · {to_st.name}',
+  mutation_date=mut_date,
+  reason=v.reason.strip(),
+  status='pending_area',
+  sender_name=v.sender_name.strip(),
+  sender_signature=sig,
+  sender_at=now(),
+  created_at=now(),
+ )
+ s.add(order)
+ s.flush()
+ items = []
+ for it in v.items:
+  row = AdoMutationItem(
+   order_id=order.id,
+   asset_id=it.asset_id,
+   asset_code=it.asset_code.strip(),
+   device_name=it.device_name.strip(),
+   brand=it.brand.strip(),
+   serial_number=it.serial_number.strip(),
+   qty=it.qty,
+  )
+  s.add(row)
+  items.append(row)
+ s.commit()
+ return serialize_mutation_order(order, items, include_pin=True)
+
+
+@router.get('/public/mutasi/{token}')
+def public_get_mutasi(token: str, s: Session = Depends(db)):
+ order = s.query(AdoMutationOrder).filter_by(token=token).first()
+ if not order:
+  raise HTTPException(404, 'Dokumen mutasi tidak ditemukan')
+ items = s.query(AdoMutationItem).filter_by(order_id=order.id).order_by(AdoMutationItem.id).all()
+ return serialize_mutation_order(order, items, include_pin=False)
+
+
+@router.post('/public/mutasi/{token}/area')
+def public_area_sign_mutasi(token: str, v: PublicMutasiAreaInput, s: Session = Depends(db)):
+ order = s.query(AdoMutationOrder).filter_by(token=token).first()
+ if not order:
+  raise HTTPException(404, 'Dokumen mutasi tidak ditemukan')
+ if order.status != 'pending_area':
+  raise HTTPException(409, 'Tahap Area Manager sudah disetujui sebelumnya')
+ sig = sanitize_signature(v.area_signature)
+ if not sig:
+  raise HTTPException(422, 'Tanda tangan Area Manager wajib diisi')
+ order.area_manager_name = v.area_manager_name.strip()
+ order.area_label = v.area_label.strip()
+ order.area_signature = sig
+ order.area_at = now()
+ order.status = 'pending_receiver'
+ s.commit()
+ items = s.query(AdoMutationItem).filter_by(order_id=order.id).order_by(AdoMutationItem.id).all()
+ return serialize_mutation_order(order, items, include_pin=False)
+
+
+@router.post('/public/mutasi/{token}/receive')
+def public_receive_mutasi(token: str, v: PublicMutasiReceiveInput, s: Session = Depends(db)):
+ order = s.query(AdoMutationOrder).filter_by(token=token).first()
+ if not order:
+  raise HTTPException(404, 'Dokumen mutasi tidak ditemukan')
+ if order.status == 'pending_area':
+  raise HTTPException(409, 'Menunggu tanda tangan Area Manager terlebih dahulu')
+ if order.status != 'pending_receiver':
+  raise HTTPException(409, 'Penerimaan store sudah dikonfirmasi sebelumnya')
+ if not hmac.compare_digest(v.pin.strip(), order.receiver_pin):
+  raise HTTPException(403, 'PIN Penerima tidak cocok')
+ sig = sanitize_signature(v.receiver_signature)
+ if not sig:
+  raise HTTPException(422, 'Tanda tangan PIC Store Penerima wajib diisi')
+ order.receiver_name = v.receiver_name.strip()
+ order.receiver_signature = sig
+ order.receiver_at = now()
+ order.status = 'pending_accounting'
+ s.commit()
+ items = s.query(AdoMutationItem).filter_by(order_id=order.id).order_by(AdoMutationItem.id).all()
+ return serialize_mutation_order(order, items, include_pin=False)
+
+
+@router.get('/mutation-orders')
+def list_mutation_orders(u: AdoUser = Depends(ado_user), s: Session = Depends(db)):
+ rows = s.query(AdoMutationOrder).order_by(AdoMutationOrder.id.desc()).limit(300).all()
+ if u.role == 'ts':
+  visible_ids = {st.id for st in visible_stores_query(s, u).all()}
+  rows = [r for r in rows if r.from_store_id in visible_ids or r.to_store_id in visible_ids]
+ order_ids = [r.id for r in rows]
+ item_map: dict[int, list[AdoMutationItem]] = {}
+ if order_ids:
+  for it in s.query(AdoMutationItem).filter(AdoMutationItem.order_id.in_(order_ids)).order_by(AdoMutationItem.id).all():
+   item_map.setdefault(it.order_id, []).append(it)
+ can_see_pin = u.role in ('super_admin', 'admin_it', 'accounting', 'ts')
+ return [serialize_mutation_order(r, item_map.get(r.id, []), include_pin=can_see_pin) for r in rows]
+
+
+@router.post('/mutation-orders/{id}/approve')
+def approve_mutation_order(
+ id: int,
+ v: AccountingApproveMutationInput,
+ u: AdoUser = Depends(ado_accounting_or_admin),
+ s: Session = Depends(db),
+):
+ order = s.get(AdoMutationOrder, id)
+ if not order:
+  raise HTTPException(404, 'Dokumen mutasi tidak ditemukan')
+ if order.status == 'approved':
+  return {'ok': True, 'already_approved': True}
+ if order.status != 'pending_accounting':
+  raise HTTPException(409, 'Mutasi belum lengkap TTD Store Pengirim, Area Manager, dan Store Penerima')
+ sig = sanitize_signature(v.accounting_signature) if v.accounting_signature is not None else (u.signature_data or '')
+ if v.save_user_signature and sig:
+  u.signature_data = sig
+ acc_name = v.accounting_name.strip() or u.name
+ order.sap_number = v.sap_number.strip()
+ order.accounting_name = acc_name
+ order.accounting_signature = sig
+ order.accounting_at = now()
+ order.status = 'approved'
+ items = s.query(AdoMutationItem).filter_by(order_id=order.id).order_by(AdoMutationItem.id).all()
+ moved_count = 0
+ for it in items:
+  asset = s.get(AdoAsset, it.asset_id) if it.asset_id else None
+  if asset:
+   if it.asset_code and not asset.asset_code:
+    asset.asset_code = it.asset_code
+   asset.store_id = order.to_store_id
+   asset.updated_at = now()
+   s.add(AdoMutation(
+    asset_id=asset.id,
+    from_store_id=order.from_store_id,
+    from_store_name=order.from_store_name,
+    to_store_id=order.to_store_id,
+    to_store_name=order.to_store_name,
+    device_name=asset.device_name,
+    serial_number=asset.serial_number,
+    moved_by=f'{order.sender_name} -> {order.receiver_name} (ACC: {acc_name})',
+    notes=f'{order.doc_number} | {order.reason}',
+    moved_at=now(),
+   ))
+   add_asset_log(
+    s,
+    asset.id,
+    'mutasi',
+    f'Mutasi {order.doc_number}: {order.from_store_name} -> {order.to_store_name} ({order.reason}, Area: {order.area_label}, ACC: {acc_name})',
+    acc_name,
+    order.mutation_date,
+   )
+   moved_count += 1
+ s.commit()
+ return {'ok': True, 'doc_number': order.doc_number, 'moved_assets': moved_count}
+
+
+@router.get('/mutation-orders/{id}/print', response_class=HTMLResponse)
+def print_mutation_order(id: int, token: str = '', request: Request = None, s: Session = Depends(db)):
+ order = s.get(AdoMutationOrder, id)
+ if not order:
+  raise HTTPException(404, 'Dokumen mutasi tidak ditemukan')
+ if not token or not hmac.compare_digest(token, order.token):
+  ado_user(request, s)
+ items = s.query(AdoMutationItem).filter_by(order_id=order.id).order_by(AdoMutationItem.id).all()
+ from_st = s.get(AdoStore, order.from_store_id)
+ to_st = s.get(AdoStore, order.to_store_id)
+ from_label = from_st.name if from_st else order.from_store_name
+ to_label = to_st.name if to_st else order.to_store_name
+ try:
+  dt_obj = datetime.strptime(order.mutation_date, '%Y-%m-%d')
+  date_id = f'{dt_obj.day} {ID_MONTHS[dt_obj.month - 1]} {dt_obj.year}'.upper()
+ except Exception:
+  date_id = escape(order.mutation_date or '-')
+ row_html = []
+ total_rows = max(5, len(items))
+ for idx in range(total_rows):
+  if idx < len(items):
+   it = items[idx]
+   row_html.append(
+    f'<tr><td class="c">{idx + 1}</td>'
+    f'<td class="code-col">{escape(it.asset_code or "-")}</td>'
+    f'<td>{escape(it.device_name)}</td>'
+    f'<td>{escape(it.brand or "-")}</td>'
+    f'<td>{escape(it.serial_number or "-")}</td>'
+    f'<td class="c">{it.qty}</td>'
+    f'<td>{escape(from_label)}</td>'
+    f'<td>{escape(to_label)}</td>'
+    f'<td class="c">{escape(date_id)}</td>'
+    f'<td>{escape(order.reason)}</td></tr>'
+   )
+  else:
+   row_html.append(f'<tr><td class="c">{idx + 1}</td><td class="code-col c">-</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>')
+ def sig_img(data_url: str) -> str:
+  return f'<img src="{escape(data_url)}" class="sig-img" alt="TTD">' if data_url else '<div class="sig-empty"></div>'
+ html = f"""<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Form Mutasi Asset - {escape(order.doc_number)}</title>
+<style>
+  @page {{ size: A4 landscape; margin: 12mm; }}
+  body {{ font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; background: #fff; font-size: 11px; }}
+  .toolbar {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #102630; color: #fff; margin-bottom: 14px; }}
+  .toolbar button {{ background: #0c8278; color: #fff; border: 0; padding: 7px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; }}
+  @media print {{ .toolbar {{ display: none; }} }}
+  .sheet {{ max-width: 1060px; margin: 0 auto; padding: 6px; }}
+  .top-sub {{ text-align: center; font-size: 10px; color: #333; margin-bottom: 6px; }}
+  .title {{ text-align: center; font-size: 15px; font-weight: 700; letter-spacing: .5px; margin-bottom: 10px; }}
+  .meta-row {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px; font-weight: 700; }}
+  .grid-wrap {{ display: grid; grid-template-columns: 1fr 120px; gap: 10px; align-items: start; }}
+  table {{ width: 100%; border-collapse: collapse; }}
+  th, td {{ border: 1px solid #111; padding: 5px 6px; font-size: 10px; }}
+  th {{ background: #1f4e78; color: #fff; text-align: center; font-weight: 700; }}
+  .code-col {{ background: #f4b6c2; text-align: center; font-weight: 600; }}
+  .c {{ text-align: center; }}
+  .sap-box {{ font-size: 11px; padding-top: 2px; }}
+  .sap-box b {{ display: block; margin-bottom: 4px; }}
+  .sigs {{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px; margin-top: 26px; text-align: center; }}
+  .sig-box {{ display: flex; flex-direction: column; align-items: center; }}
+  .sig-img {{ max-height: 54px; max-width: 130px; object-fit: contain; margin: 6px 0; }}
+  .sig-empty {{ height: 54px; margin: 6px 0; }}
+  .sig-name {{ font-weight: 700; text-transform: uppercase; }}
+  .sig-role {{ font-size: 10px; text-transform: uppercase; }}
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <div><b>MUTASI ASSET / KIRIM BARANG</b> &middot; {escape(order.doc_number)}</div>
+    <button onclick="window.print()">&#128424; Print / Simpan PDF</button>
+  </div>
+  <div class="sheet">
+    <div class="top-sub">Form Mutasi Asset</div>
+    <div class="title">MUTASI ASSET/KIRIM BARANG</div>
+    <div class="meta-row"><div>No: {escape(order.doc_number)}</div></div>
+    <div class="grid-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:28px">NO.</th>
+            <th style="width:125px">KODE ASSET</th>
+            <th>NAMA BARANG</th>
+            <th>MERK</th>
+            <th>S.N<br>(Serial Number)</th>
+            <th style="width:36px">QTY</th>
+            <th>LOKASI LAMA<br>(STORE / DIVISI PENGIRIM)</th>
+            <th>LOKASI BARU<br>(STORE / DIVISI PENERIMA)</th>
+            <th>TANGGAL MUTASI</th>
+            <th>ALASAN MUTASI</th>
+          </tr>
+        </thead>
+        <tbody>{''.join(row_html)}</tbody>
+      </table>
+      <div class="sap-box">
+        <b>NO SAP:</b>
+        <div>{escape(order.sap_number or '-')}</div>
+      </div>
+    </div>
+    <div class="sigs">
+      <div class="sig-box">
+        <div>Diajukan Oleh</div>
+        {sig_img(order.sender_signature)}
+        <div class="sig-name">( {escape(order.sender_name or '...')} )</div>
+        <div class="sig-role">PIC STORE {escape(from_label)}</div>
+      </div>
+      <div class="sig-box">
+        <div>Mengetahui</div>
+        {sig_img(order.area_signature)}
+        <div class="sig-name">{escape(order.area_manager_name or '( ... )')}</div>
+        <div class="sig-role">{escape(order.area_label or 'Area Manager 01')}</div>
+      </div>
+      <div class="sig-box">
+        <div>Diterima Oleh</div>
+        {sig_img(order.receiver_signature)}
+        <div class="sig-name">( {escape(order.receiver_name or '...')} )</div>
+        <div class="sig-role">PIC STORE {escape(to_label)}</div>
+      </div>
+      <div class="sig-box">
+        <div>Diperiksa Oleh</div>
+        {sig_img(order.accounting_signature)}
+        <div class="sig-name">{escape(order.accounting_name or '( ... )')}</div>
+        <div class="sig-role">ACCOUNTING</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+ return HTMLResponse(html, headers={'X-Frame-Options': 'SAMEORIGIN'})

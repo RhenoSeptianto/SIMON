@@ -534,11 +534,21 @@ def reset_database(v:ResetDatabase,u=Depends(super_admin),s:Session=Depends(db))
 # The maintenance gate blocks data mutations during schema changes/rollback.
 @app.middleware('http')
 async def maintenance_gate(request,call_next):
+ from fastapi.responses import JSONResponse
  if (DATA/'updater'/'maintenance.json').exists() and request.url.path.startswith('/api/') and request.url.path not in ('/api/health','/api/me','/api/system/update/status'):
-  from fastapi.responses import JSONResponse
-  response=JSONResponse({'detail':'SIMON sedang diperbarui. Coba lagi setelah selesai.'},status_code=503,headers={'Retry-After':'5'})
+  response=JSONResponse({'detail':'SIMONADO sedang diperbarui. Coba lagi setelah selesai.'},status_code=503,headers={'Retry-After':'5'})
  else:
-  response=await call_next(request)
+  try:
+   response=await call_next(request)
+  except Exception as exc:
+   if not request.url.path.startswith('/api/'):raise
+   import traceback; traceback.print_exc()
+   msg=str(exc)
+   if 'pg_toast' in msg or 'DataCorrupted' in msg:
+    detail='Database PostgreSQL perlu perbaikan statistik (pg_statistic). Jalankan deployment/server/repair-pg-stats.bat di server.'
+   else:
+    detail=f'Terjadi kesalahan internal server: {type(exc).__name__}'
+   response=JSONResponse({'detail':detail},status_code=500)
  response.headers.setdefault('X-Content-Type-Options','nosniff')
  response.headers.setdefault('X-Frame-Options','DENY')
  response.headers.setdefault('Referrer-Policy','same-origin')
@@ -557,7 +567,7 @@ def system_health(s:Session=Depends(db)):
  try:
   pool_info={'pool_size':getattr(pool,'size',lambda:None)(),'checked_out':getattr(pool,'checkedout',lambda:None)(),'overflow':getattr(pool,'overflow',lambda:None)(),'checked_in':getattr(pool,'checkedin',lambda:None)()}
  except Exception:pass
- return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'database_kind':kind,'database_id':descriptor['id'],'database_label':db_label,'db_latency_ms':db_latency_ms,'pool':pool_info,'server_time':time.time()}
+ return {'ok':True,'version':os.getenv('SIAMS_BUILD_SHA','bootstrap'),'app_version':APP_VERSION,'database_kind':kind,'database_id':descriptor['id'],'database_label':db_label,'db_latency_ms':db_latency_ms,'pool':pool_info,'server_time':time.time()}
 
 def updater_database():
  return database_descriptor(str(engine.url))['id']
