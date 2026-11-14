@@ -190,7 +190,7 @@ try:
   page.locator('#loginTheme').click()
   assert page.evaluate("document.body.classList.contains('dark')")==was_dark
   page.locator('#loginUpdateBtn').click()
-  expect(page.get_by_role('heading',name='Update aplikasi SIMON',exact=True)).to_be_visible()
+  expect(page.get_by_role('heading',name='Update aplikasi SIMONADO',exact=True)).to_be_visible()
   expect(page.get_by_role('button',name='Cek update',exact=True)).to_be_enabled()
   page.get_by_role('button',name='Cek update',exact=True).click()
   expect(page.get_by_role('button',name='Update sekarang',exact=True)).to_be_enabled()
@@ -201,6 +201,9 @@ try:
   update_success[0]=True
   with page.expect_navigation(timeout=15000,wait_until='domcontentloaded'):
    page.get_by_role('button',name='Update sekarang',exact=True).click()
+  expect(page.locator('#closeUpdatedNoticeBtn')).to_be_visible(timeout=10000)
+  expect(page.get_by_text('SIMONADO Sudah Terupdate',exact=True)).to_be_visible()
+  page.locator('#closeUpdatedNoticeBtn').click()
   expect(page.locator('#loginUpdateBtn')).to_be_visible(timeout=10000)
   page.locator('#loginUpdateBtn').click()
   expect(page.get_by_text('Update berhasil. Server sudah siap digunakan.',exact=True)).to_be_visible(timeout=10000)
@@ -213,7 +216,7 @@ try:
   page.locator('#loginUpdateAuthForm [name=username]').fill('qaadmin')
   page.locator('#loginUpdateAuthForm [name=password]').fill('1')
   page.locator('#loginUpdateAuthBtn').click()
-  expect(page.get_by_role('heading',name='Update aplikasi SIMON',exact=True)).to_be_visible()
+  expect(page.get_by_role('heading',name='Update aplikasi SIMONADO',exact=True)).to_be_visible()
   page.locator('#closeLoginUpdateModal').click()
   page.locator('[name=username]').fill('qaadmin');page.locator('[name=password]').fill('1');page.get_by_role('button',name='Masuk ke dashboard').click()
   expect(page.get_by_role('button',name='Alerts',exact=True)).to_be_visible()
@@ -377,6 +380,12 @@ try:
   page.screenshot(path=str(target/'ado-do-print.png'),full_page=True)
   page.goto('http://127.0.0.1:8769/mutasi',wait_until='networkidle')
   expect(page.locator('#pubCreateMutForm')).to_be_visible()
+  page.locator('#pubMutClose').click()
+  expect(page.locator('#mutLandLoginBtn')).to_have_count(0)
+  expect(page.locator('#mutLandTrackBtn')).to_be_visible()
+  page.locator('#mutLandTrackBtn').click()
+  expect(page.locator('#pubTrackSearch')).to_be_visible()
+  page.locator('#pubTrackClose').click()
   assert not errors,errors
   print('PASS: desktop/mobile, tabs, percentages, history tooltip/slider/period, refresh, assignment, TS authorization, and ADO workflow; no JavaScript errors.')
   browser.close()

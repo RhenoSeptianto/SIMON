@@ -442,6 +442,8 @@ def test_ado_full_workflow_and_roles():
  assert any(a['id']==asset_id and a['store_id']==st1 and a['asset_code']=='AST-001' for a in moved_assets)
  logs_after=ts_c.get(f'/api/ado/assets/{asset_id}/logs').json()['logs']
  assert any(l['event_type']=='mutasi' and mut_data['doc_number'] in (l['description'] or '') for l in logs_after)
+ track=pub_c.get(f"/api/ado/public/mutasi-track?q={mut_data['doc_number']}").json()
+ assert len(track)==1 and track[0]['status']=='approved' and track[0]['sap_number']=='4900098765' and 'receiver_pin' not in track[0] and 'token' not in track[0]
 
 
 

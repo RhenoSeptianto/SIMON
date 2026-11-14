@@ -1845,3 +1845,64 @@ async function openPublicMutasiModal(token = '', onDone = null) {
  }
 }
 
+async function openPublicMutasiTrackModal() {
+ document.querySelectorAll('dialog.ado-dlg').forEach(d => d.remove());
+ const dlg = document.createElement('dialog');
+ dlg.className = 'ado-dlg modal-dialog mutasi-public-dlg';
+ dlg.innerHTML = `<div class="modal-head"><h3>Cek Status &amp; Progres TTD Mutasi</h3><button type="button" class="secondary compact" id="pubTrackClose">&times;</button></div>
+  <div class="modal-body">
+   <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input id="pubTrackSearch" type="search" placeholder="Cari No. Dokumen (OPS/MA/...), Store, atau Serial Number..." style="flex:1;margin:0">
+    <button type="button" id="pubTrackSearchBtn" class="secondary compact">Cari</button>
+   </div>
+   <div id="pubTrackList"><div class="muted" style="padding:18px;text-align:center">Memuat progres mutasi...</div></div>
+  </div>`;
+ document.body.appendChild(dlg);
+ dlg.showModal();
+ dlg.querySelector('#pubTrackClose')?.addEventListener('click', () => dlg.close());
+ dlg.addEventListener('close', () => dlg.remove());
+
+ const listEl = dlg.querySelector('#pubTrackList');
+ const searchIn = dlg.querySelector('#pubTrackSearch');
+ const loadTrack = async (q = '') => {
+  listEl.innerHTML = '<div class="muted" style="padding:16px;text-align:center">Mencari data...</div>';
+  try {
+   const res = await fetch('/api/ado/public/mutasi-track?q=' + encodeURIComponent(q));
+   const rows = await res.json();
+   if (!res.ok) throw new Error(rows.detail || 'Gagal memuat status');
+   if (!rows.length) {
+    listEl.innerHTML = '<div class="empty" style="padding:20px;text-align:center">Belum ada data mutasi yang cocok.</div>';
+    return;
+   }
+   listEl.innerHTML = rows.map(r => {
+    const s1 = true;
+    const s2 = ['pending_receiver', 'pending_accounting', 'approved'].includes(r.status);
+    const s3 = ['pending_accounting', 'approved'].includes(r.status);
+    const s4 = r.status === 'approved';
+    const itemsTxt = (r.items || []).map(it => `${it.device_name}${it.serial_number ? ' (' + it.serial_number + ')' : ''} x${it.qty}`).join(', ');
+    return `<div class="mutasi-track-card">
+     <div class="mutasi-track-head">
+      <div><b>${esc(r.doc_number)}</b> <span class="muted">· ${esc(r.mutation_date)}</span></div>
+      <span class="mutasi-stage-badge mutasi-st-${esc(r.status)}">${s4 ? 'Selesai (Approved)' : s3 ? 'Menunggu Accounting' : s2 ? 'Menunggu Penerima (PIN)' : 'Menunggu TTD Area'}</span>
+     </div>
+     <div style="font-size:13px;margin:4px 0"><b>${esc(r.from_store_name)}</b> &rarr; <b>${esc(r.to_store_name)}</b></div>
+     <div class="muted" style="font-size:12px;margin-bottom:8px">${esc(itemsTxt || '-')}</div>
+     <div class="mutasi-stepper">
+      <div class="mutasi-step ${s1 ? 'done' : ''}"><span class="step-dot">${s1 ? '&#10003;' : '1'}</span><div><b>Pengirim</b><small>${esc(r.sender_name || '-')}</small></div></div>
+      <div class="mutasi-step ${s2 ? 'done' : r.status === 'pending_area' ? 'active' : ''}"><span class="step-dot">${s2 ? '&#10003;' : '2'}</span><div><b>${esc(r.area_label || 'Area Manager')}</b><small>${esc(r.area_manager_name || 'Menunggu TTD')}</small></div></div>
+      <div class="mutasi-step ${s3 ? 'done' : r.status === 'pending_receiver' ? 'active' : ''}"><span class="step-dot">${s3 ? '&#10003;' : '3'}</span><div><b>Store Penerima</b><small>${esc(r.receiver_name || 'Menunggu PIN')}</small></div></div>
+      <div class="mutasi-step ${s4 ? 'done' : r.status === 'pending_accounting' ? 'active' : ''}"><span class="step-dot">${s4 ? '&#10003;' : '4'}</span><div><b>Accounting</b><small>${s4 ? 'SAP: ' + esc(r.sap_number || '-') : 'Menunggu SAP'}</small></div></div>
+     </div>
+    </div>`;
+   }).join('');
+  } catch (err) {
+   listEl.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+  }
+ };
+ loadTrack('');
+ let tmr = null;
+ searchIn.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(() => loadTrack(searchIn.value.trim()), 250); });
+ dlg.querySelector('#pubTrackSearchBtn').addEventListener('click', () => loadTrack(searchIn.value.trim()));
+}
+
+

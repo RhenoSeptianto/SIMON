@@ -2021,6 +2021,56 @@ def public_create_mutasi(v: PublicMutasiCreateInput, s: Session = Depends(db)):
  return serialize_mutation_order(order, items, include_pin=True)
 
 
+@router.get('/public/mutasi-track')
+def public_track_mutasi(q: str = '', s: Session = Depends(db)):
+ query_text = q.strip().lower()
+ rows = s.query(AdoMutationOrder).order_by(AdoMutationOrder.id.desc()).limit(200).all()
+ order_ids = [r.id for r in rows]
+ item_map: dict[int, list[AdoMutationItem]] = {}
+ if order_ids:
+  for it in s.query(AdoMutationItem).filter(AdoMutationItem.order_id.in_(order_ids)).order_by(AdoMutationItem.id).all():
+   item_map.setdefault(it.order_id, []).append(it)
+ out = []
+ for r in rows:
+  its = item_map.get(r.id, [])
+  if query_text:
+   hay = ' '.join([
+    r.doc_number or '',
+    r.from_store_name or '',
+    r.to_store_name or '',
+    r.sender_name or '',
+    r.area_manager_name or '',
+    r.receiver_name or '',
+    r.sap_number or '',
+    ' '.join((it.serial_number or '') + ' ' + (it.device_name or '') + ' ' + (it.asset_code or '') for it in its),
+   ]).lower()
+   if query_text not in hay:
+    continue
+  out.append({
+   'id': r.id,
+   'doc_number': r.doc_number,
+   'from_store_name': r.from_store_name,
+   'to_store_name': r.to_store_name,
+   'mutation_date': r.mutation_date,
+   'reason': r.reason,
+   'status': r.status,
+   'sender_name': r.sender_name,
+   'sender_at': r.sender_at,
+   'area_label': r.area_label,
+   'area_manager_name': r.area_manager_name,
+   'area_at': r.area_at,
+   'receiver_name': r.receiver_name,
+   'receiver_at': r.receiver_at,
+   'accounting_name': r.accounting_name,
+   'accounting_at': r.accounting_at,
+   'sap_number': r.sap_number,
+   'items': [{'device_name': it.device_name, 'brand': it.brand, 'serial_number': it.serial_number, 'qty': it.qty} for it in its],
+  })
+  if len(out) >= 20:
+   break
+ return out
+
+
 @router.get('/public/mutasi/{token}')
 def public_get_mutasi(token: str, s: Session = Depends(db)):
  order = s.query(AdoMutationOrder).filter_by(token=token).first()
